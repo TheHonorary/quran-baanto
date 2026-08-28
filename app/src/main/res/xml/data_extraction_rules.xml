@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Data extraction rules for Android 12+ backup and restore -->
+<data-extraction-rules>
+    <cloud-backup>
+        <!-- Standard cloud backup enabled -->
+    </cloud-backup>
+    <device-transfer>
+        <!-- Standard device transfer enabled -->
+    </device-transfer>
+</data-extraction-rules>

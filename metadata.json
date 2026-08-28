@@ -1,0 +1,6 @@
+{
+  "name": "Quran Baanto",
+  "description": "Quran Baanto — a calm, offline-first Android app for organizing Qur'an Khatm and Amal distributions among families and groups.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
