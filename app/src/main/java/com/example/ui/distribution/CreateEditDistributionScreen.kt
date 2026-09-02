@@ -1,6 +1,7 @@
 package com.example.ui.distribution
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,7 +29,9 @@ import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -44,6 +47,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -104,19 +108,19 @@ fun CreateEditDistributionScreen(
             if (initialType == DistributionType.AMAL) {
                 distributionName = "Surah Yaseen"
                 totalTargetText = "110"
-                participants.add(ParticipantAllocation(name = "Dad", count = 20, displayOrder = 1))
-                participants.add(ParticipantAllocation(name = "Mom", count = 20, displayOrder = 2))
-                participants.add(ParticipantAllocation(name = "Hamza", count = 20, displayOrder = 3))
-                participants.add(ParticipantAllocation(name = "Sara", count = 20, displayOrder = 4))
-                participants.add(ParticipantAllocation(name = "Tariq", count = 30, displayOrder = 5))
+                participants.add(ParticipantAllocation(name = "Person 1", count = 20, displayOrder = 1))
+                participants.add(ParticipantAllocation(name = "Person 2", count = 20, displayOrder = 2))
+                participants.add(ParticipantAllocation(name = "Person 3", count = 20, displayOrder = 3))
+                participants.add(ParticipantAllocation(name = "Person 4", count = 20, displayOrder = 4))
+                participants.add(ParticipantAllocation(name = "Person 5", count = 30, displayOrder = 5))
             } else {
                 distributionName = "Family Khatm"
                 totalTargetText = "30"
-                participants.add(ParticipantAllocation(name = "Dad", count = 6, displayOrder = 1))
-                participants.add(ParticipantAllocation(name = "Mom", count = 6, displayOrder = 2))
-                participants.add(ParticipantAllocation(name = "Hamza", count = 6, displayOrder = 3))
-                participants.add(ParticipantAllocation(name = "Sara", count = 6, displayOrder = 4))
-                participants.add(ParticipantAllocation(name = "Tariq", count = 6, displayOrder = 5))
+                participants.add(ParticipantAllocation(name = "Person 1", count = 6, displayOrder = 1))
+                participants.add(ParticipantAllocation(name = "Person 2", count = 6, displayOrder = 2))
+                participants.add(ParticipantAllocation(name = "Person 3", count = 6, displayOrder = 3))
+                participants.add(ParticipantAllocation(name = "Person 4", count = 6, displayOrder = 4))
+                participants.add(ParticipantAllocation(name = "Person 5", count = 6, displayOrder = 5))
             }
         }
     }
@@ -453,7 +457,7 @@ fun CreateEditDistributionScreen(
                             }
                             participants.add(
                                 ParticipantAllocation(
-                                    name = "Member ${participants.size + 1}",
+                                    name = "Person ${participants.size + 1}",
                                     count = defaultCount,
                                     displayOrder = participants.size + 1
                                 )
@@ -479,7 +483,7 @@ fun CreateEditDistributionScreen(
             // Participant list items
             itemsIndexed(
                 items = participants,
-                key = { index, item -> item.id.toString() + "_" + index }
+                key = { _, item -> item.uid }
             ) { index, participant ->
                 ParticipantRowItem(
                     orderNumber = index + 1,
@@ -543,7 +547,7 @@ private fun applyPreset(
     for (i in 1..count) {
         participants.add(
             ParticipantAllocation(
-                name = "Member $i",
+                name = "Person $i",
                 count = countPerPerson,
                 displayOrder = i
             )
@@ -579,6 +583,83 @@ private fun ParticipantRowItem(
     canDelete: Boolean,
     modifier: Modifier = Modifier
 ) {
+    var showManualInputDialog by remember { mutableStateOf(false) }
+
+    if (showManualInputDialog) {
+        var typedValue by remember { mutableStateOf(participant.count.toString()) }
+        AlertDialog(
+            onDismissRequest = { showManualInputDialog = false },
+            title = {
+                Text(
+                    text = "Set Allocation for ${participant.name.ifBlank { "Person $orderNumber" }}",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                )
+            },
+            text = {
+                Column {
+                    Text(
+                        text = if (isAmal) "Type the exact target recitations:" else "Type the exact number of Paras (1–30):",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = typedValue,
+                        onValueChange = { input ->
+                            typedValue = input.filter { it.isDigit() }
+                        },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    // Quick adjustment chips
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        listOf(1, 5, 10, 20).forEach { delta ->
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                                modifier = Modifier.clickable {
+                                    val current = typedValue.toIntOrNull() ?: participant.count
+                                    typedValue = (current + delta).toString()
+                                }
+                            ) {
+                                Text(
+                                    text = "+$delta",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val entered = typedValue.toIntOrNull()
+                        if (entered != null && entered > 0) {
+                            onCountChange(entered)
+                        }
+                        showManualInputDialog = false
+                    }
+                ) {
+                    Text("Apply")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showManualInputDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
     Surface(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(14.dp),
@@ -594,7 +675,7 @@ private fun ParticipantRowItem(
                 .fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Order number badge & re-order controls
+            // Order number badge & re-order controls (uniform 1:1 aspect ratio buttons)
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
@@ -602,7 +683,7 @@ private fun ParticipantRowItem(
                 IconButton(
                     onClick = { onMoveUp?.invoke() },
                     enabled = onMoveUp != null,
-                    modifier = Modifier.size(20.dp)
+                    modifier = Modifier.size(24.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.ArrowUpward,
@@ -621,7 +702,7 @@ private fun ParticipantRowItem(
                 IconButton(
                     onClick = { onMoveDown?.invoke() },
                     enabled = onMoveDown != null,
-                    modifier = Modifier.size(20.dp)
+                    modifier = Modifier.size(24.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.ArrowDownward,
@@ -637,7 +718,7 @@ private fun ParticipantRowItem(
             // Name Field
             OutlinedTextField(
                 value = participant.name,
-                onNameChange,
+                onValueChange = onNameChange,
                 modifier = Modifier.weight(1f),
                 placeholder = { Text("Name") },
                 singleLine = true,
@@ -650,7 +731,7 @@ private fun ParticipantRowItem(
 
             Spacer(modifier = Modifier.width(8.dp))
 
-            // Count Stepper & Input
+            // Count Stepper & Input with tap-to-type capability
             val stepDelta = if (isAmal && participant.count >= 20) 5 else 1
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -661,32 +742,41 @@ private fun ParticipantRowItem(
             ) {
                 IconButton(
                     onClick = { onCountChange(participant.count - stepDelta) },
-                    modifier = Modifier.size(26.dp)
+                    modifier = Modifier.size(28.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Remove,
                         contentDescription = "Decrease",
-                        modifier = Modifier.size(12.dp)
+                        modifier = Modifier.size(14.dp)
                     )
                 }
 
-                Text(
-                    text = if (isAmal) "${participant.count}" else "${participant.count} p",
-                    style = MaterialTheme.typography.labelMedium.copy(
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 11.sp
-                    ),
-                    modifier = Modifier.padding(horizontal = 2.dp)
-                )
+                // Clickable count badge: allows typing exact value
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .clickable { showManualInputDialog = true }
+                        .padding(horizontal = 6.dp, vertical = 3.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = if (isAmal) "${participant.count}" else "${participant.count} p",
+                        style = MaterialTheme.typography.labelMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp
+                        ),
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
 
                 IconButton(
                     onClick = { onCountChange(participant.count + stepDelta) },
-                    modifier = Modifier.size(26.dp)
+                    modifier = Modifier.size(28.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Add,
                         contentDescription = "Increase",
-                        modifier = Modifier.size(12.dp)
+                        modifier = Modifier.size(14.dp)
                     )
                 }
             }
@@ -695,7 +785,7 @@ private fun ParticipantRowItem(
                 Spacer(modifier = Modifier.width(4.dp))
                 IconButton(
                     onClick = onRemove,
-                    modifier = Modifier.size(26.dp)
+                    modifier = Modifier.size(28.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Delete,

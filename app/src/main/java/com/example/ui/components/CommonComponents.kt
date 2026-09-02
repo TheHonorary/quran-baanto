@@ -163,7 +163,7 @@ fun ParaNumberBadge(
     val formattedNumber = String.format("%02d", number)
     Box(
         modifier = modifier
-            .size(36.dp)
+            .size(38.dp)
             .clip(CircleShape)
             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)),
         contentAlignment = Alignment.Center

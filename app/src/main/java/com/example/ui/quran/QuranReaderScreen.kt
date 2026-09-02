@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.InlineTextContent
@@ -41,6 +42,7 @@ import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.WbSunny
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -101,6 +103,7 @@ fun QuranReaderScreen(
     val selectedSurahNumber by quranViewModel.selectedSurahNumber.collectAsState()
     val surahDetail by quranViewModel.surahDetail.collectAsState()
     val lastReadBookmark by quranViewModel.lastReadBookmark.collectAsState()
+    val isLoading by quranViewModel.isLoading.collectAsState()
 
     val fontSizeSp by quranViewModel.fontSizeSp.collectAsState()
     val readingTheme by quranViewModel.readingTheme.collectAsState()
@@ -210,7 +213,10 @@ fun QuranReaderScreen(
                         }
                     },
                     navigationIcon = {
-                        IconButton(onClick = onBack) {
+                        IconButton(
+                            onClick = onBack,
+                            modifier = Modifier.size(40.dp)
+                        ) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                                 contentDescription = "Back",
@@ -245,7 +251,8 @@ fun QuranReaderScreen(
                                     quranViewModel.saveBookmark(bookmark)
                                     Toast.makeText(context, "Bookmarked Surah ${detail.info.transliteration}", Toast.LENGTH_SHORT).show()
                                 }
-                            }
+                            },
+                            modifier = Modifier.size(40.dp)
                         ) {
                             Icon(
                                 imageVector = if (isCurrentBookmarked) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
@@ -256,7 +263,8 @@ fun QuranReaderScreen(
 
                         // Keep Screen On Toggle
                         IconButton(
-                            onClick = { quranViewModel.toggleKeepScreenOn() }
+                            onClick = { quranViewModel.toggleKeepScreenOn() },
+                            modifier = Modifier.size(40.dp)
                         ) {
                             Icon(
                                 imageVector = if (keepScreenOn) Icons.Default.WbSunny else Icons.Default.LockOpen,
@@ -371,7 +379,8 @@ fun QuranReaderScreen(
                                             quranViewModel.selectPara(currentNum - 1)
                                         }
                                     },
-                                    enabled = currentNum > 1
+                                    enabled = currentNum > 1,
+                                    modifier = Modifier.size(38.dp)
                                 ) {
                                     Icon(
                                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
@@ -387,7 +396,8 @@ fun QuranReaderScreen(
                                             quranViewModel.selectSurah(currentNum - 1)
                                         }
                                     },
-                                    enabled = currentNum > 1
+                                    enabled = currentNum > 1,
+                                    modifier = Modifier.size(38.dp)
                                 ) {
                                     Icon(
                                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
@@ -404,7 +414,7 @@ fun QuranReaderScreen(
                             ) {
                                 IconButton(
                                     onClick = { quranViewModel.adjustFontSize(-2) },
-                                    modifier = Modifier.size(36.dp)
+                                    modifier = Modifier.size(32.dp)
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.Remove,
@@ -424,7 +434,7 @@ fun QuranReaderScreen(
 
                                 IconButton(
                                     onClick = { quranViewModel.adjustFontSize(2) },
-                                    modifier = Modifier.size(36.dp)
+                                    modifier = Modifier.size(32.dp)
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.Add,
@@ -443,7 +453,8 @@ fun QuranReaderScreen(
                                             quranViewModel.selectPara(currentNum + 1)
                                         }
                                     },
-                                    enabled = currentNum < 30
+                                    enabled = currentNum < 30,
+                                    modifier = Modifier.size(38.dp)
                                 ) {
                                     Icon(
                                         imageVector = Icons.AutoMirrored.Filled.ArrowForward,
@@ -459,7 +470,8 @@ fun QuranReaderScreen(
                                             quranViewModel.selectSurah(currentNum + 1)
                                         }
                                     },
-                                    enabled = currentNum < 114
+                                    enabled = currentNum < 114,
+                                    modifier = Modifier.size(38.dp)
                                 ) {
                                     Icon(
                                         imageVector = Icons.AutoMirrored.Filled.ArrowForward,
@@ -488,7 +500,18 @@ fun QuranReaderScreen(
                     showControls = !showControls
                 }
         ) {
-            if (isParaMode) {
+            if (isLoading) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(
+                        color = markerColor,
+                        strokeWidth = 3.dp,
+                        modifier = Modifier.size(40.dp)
+                    )
+                }
+            } else if (isParaMode) {
                 val detail = paraDetail
                 if (detail == null) {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -533,12 +556,52 @@ fun QuranReaderScreen(
                             start = 20.dp,
                             end = 20.dp
                         ),
-                        verticalArrangement = Arrangement.spacedBy(28.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
                         modifier = Modifier.fillMaxSize()
                     ) {
-                        item(key = "surah_reader_${detail.info.number}") {
-                            SingleSurahReaderFlow(
-                                detail = detail,
+                        item(key = "surah_header_${detail.info.number}") {
+                            val subtitle = "${detail.info.englishMeaning} • ${if (detail.info.revelationType == RevelationType.MAKKI) "Makki" else "Madani"} • ${detail.info.versesCount} Verses • Para ${detail.info.startingPara}"
+                            ChapterHeaderBanner(
+                                surahNumber = detail.info.number,
+                                surahNameEnglish = detail.info.transliteration,
+                                surahNameArabic = detail.info.arabicName,
+                                subtitle = subtitle,
+                                markerColor = markerColor,
+                                textColor = textColor
+                            )
+
+                            val bismillahText = detail.bismillah
+                            if (!bismillahText.isNullOrEmpty()) {
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Text(
+                                    text = bismillahText,
+                                    style = TextStyle(
+                                        fontSize = (fontSizeSp + 3).sp,
+                                        fontWeight = FontWeight.Bold,
+                                        fontFamily = if (arabicFontStyle == ArabicFontStyle.UTHMANI) FontFamily.Serif else FontFamily.Default,
+                                        textAlign = TextAlign.Center,
+                                        textDirection = TextDirection.Rtl
+                                    ),
+                                    color = textColor,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 10.dp)
+                                )
+                                Spacer(modifier = Modifier.height(16.dp))
+                            } else {
+                                Spacer(modifier = Modifier.height(12.dp))
+                            }
+                        }
+
+                        // Chunk verses into sets of 12 for smooth, virtualized 60fps scrolling
+                        val verseChunks = detail.verses.chunked(12)
+                        itemsIndexed(
+                            items = verseChunks,
+                            key = { idx, _ -> "chunk_${detail.info.number}_$idx" }
+                        ) { chunkIdx, chunkVerses ->
+                            MushafVersesFlow(
+                                rawVerses = chunkVerses,
+                                startingFallbackNumber = (chunkIdx * 12) + 1,
                                 fontSizeSp = fontSizeSp,
                                 fontStyle = arabicFontStyle,
                                 textColor = textColor,
@@ -690,72 +753,21 @@ private fun SurahSectionReaderFlow(
             Spacer(modifier = Modifier.height(12.dp))
         }
 
-        // Continuous Flowing Verses with Integrated Ayah Markers
-        MushafVersesFlow(
-            rawVerses = section.verses,
-            fontSizeSp = fontSizeSp,
-            fontStyle = fontStyle,
-            textColor = textColor,
-            markerColor = markerColor
-        )
-    }
-}
-
-@Composable
-private fun SingleSurahReaderFlow(
-    detail: SurahDetail,
-    fontSizeSp: Int,
-    fontStyle: ArabicFontStyle,
-    textColor: Color,
-    markerColor: Color,
-    modifier: Modifier = Modifier
-) {
-    Column(
-        modifier = modifier.fillMaxWidth(),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        // Chapter Header Banner
-        val subtitle = "${detail.info.englishMeaning} • ${if (detail.info.revelationType == RevelationType.MAKKI) "Makki" else "Madani"} • ${detail.info.versesCount} Verses • Para ${detail.info.startingPara}"
-        ChapterHeaderBanner(
-            surahNumber = detail.info.number,
-            surahNameEnglish = detail.info.transliteration,
-            surahNameArabic = detail.info.arabicName,
-            subtitle = subtitle,
-            markerColor = markerColor,
-            textColor = textColor
-        )
-
-        // Bismillah
-        val bismillahText = detail.bismillah
-        if (!bismillahText.isNullOrEmpty()) {
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                text = bismillahText,
-                style = TextStyle(
-                    fontSize = (fontSizeSp + 3).sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = if (fontStyle == ArabicFontStyle.UTHMANI) FontFamily.Serif else FontFamily.Default,
-                    textAlign = TextAlign.Center,
-                    textDirection = TextDirection.Rtl
-                ),
-                color = textColor,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 10.dp)
+        // Continuous Flowing Verses with Integrated Ayah Markers (chunked for smooth rendering)
+        val chunks = section.verses.chunked(12)
+        chunks.forEachIndexed { chunkIndex, chunkVerses ->
+            MushafVersesFlow(
+                rawVerses = chunkVerses,
+                startingFallbackNumber = (chunkIndex * 12) + 1,
+                fontSizeSp = fontSizeSp,
+                fontStyle = fontStyle,
+                textColor = textColor,
+                markerColor = markerColor
             )
-            Spacer(modifier = Modifier.height(16.dp))
-        } else {
-            Spacer(modifier = Modifier.height(12.dp))
+            if (chunkIndex < chunks.size - 1) {
+                Spacer(modifier = Modifier.height(12.dp))
+            }
         }
-
-        // Continuous Flowing Verses with Integrated Ayah Markers
-        MushafVersesFlow(
-            rawVerses = detail.verses,
-            fontSizeSp = fontSizeSp,
-            fontStyle = fontStyle,
-            textColor = textColor,
-            markerColor = markerColor
-        )
     }
 }
 
@@ -766,15 +778,16 @@ private fun SingleSurahReaderFlow(
 @Composable
 private fun MushafVersesFlow(
     rawVerses: List<String>,
+    startingFallbackNumber: Int = 1,
     fontSizeSp: Int,
     fontStyle: ArabicFontStyle,
     textColor: Color,
     markerColor: Color,
     modifier: Modifier = Modifier
 ) {
-    val parsedAyahs = remember(rawVerses) {
+    val parsedAyahs = remember(rawVerses, startingFallbackNumber) {
         rawVerses.mapIndexed { index, verseStr ->
-            parseAyah(verseStr, fallbackNumber = index + 1)
+            parseAyah(verseStr, fallbackNumber = startingFallbackNumber + index)
         }
     }
 

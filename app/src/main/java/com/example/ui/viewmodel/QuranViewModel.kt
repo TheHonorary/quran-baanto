@@ -2,6 +2,7 @@ package com.example.ui.viewmodel
 
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
 import com.example.data.preferences.BookmarkManager
 import com.example.data.quran.ArabicFontStyle
 import com.example.data.quran.LastReadBookmark
@@ -11,9 +12,12 @@ import com.example.data.quran.QuranRepository
 import com.example.data.quran.ReadMode
 import com.example.data.quran.SurahDetail
 import com.example.data.quran.SurahInfo
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 enum class ReadingTheme {
     DEFAULT, SEPIA, DARK
@@ -25,8 +29,10 @@ class QuranViewModel(application: Application) : AndroidViewModel(application) {
     private val bookmarkManager = BookmarkManager(context)
 
     init {
-        // Initialize complete offline Qur'an repository from assets
-        QuranRepository.initialize(context)
+        // Initialize offline Qur'an repository asynchronously on background thread
+        viewModelScope.launch(Dispatchers.IO) {
+            QuranRepository.initialize(context)
+        }
     }
 
     val paraList: List<ParaInfo> = QuranRepository.ALL_PARAS
@@ -35,6 +41,9 @@ class QuranViewModel(application: Application) : AndroidViewModel(application) {
     // Active Reader Mode (Para vs Surah)
     private val _activeReadMode = MutableStateFlow(ReadMode.PARA)
     val activeReadMode: StateFlow<ReadMode> = _activeReadMode.asStateFlow()
+
+    private val _isLoading = MutableStateFlow(false)
+    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
     private val _selectedParaNumber = MutableStateFlow<Int?>(null)
     val selectedParaNumber: StateFlow<Int?> = _selectedParaNumber.asStateFlow()
@@ -70,20 +79,26 @@ class QuranViewModel(application: Application) : AndroidViewModel(application) {
         _surahDetail.value = null
 
         if (paraNumber != null) {
-            val detail = QuranRepository.getParaDetail(context, paraNumber)
-            _paraDetail.value = detail
-
-            val bookmark = LastReadBookmark(
-                mode = ReadMode.PARA,
-                id = paraNumber,
-                title = "Para $paraNumber — ${detail.info.transliteration}",
-                arabicTitle = detail.info.arabicTitle,
-                subtitle = detail.info.surahRange
-            )
-            _lastReadBookmark.value = bookmark
-            bookmarkManager.saveLastRead(bookmark)
+            _isLoading.value = true
+            viewModelScope.launch(Dispatchers.IO) {
+                val detail = QuranRepository.getParaDetail(context, paraNumber)
+                val bookmark = LastReadBookmark(
+                    mode = ReadMode.PARA,
+                    id = paraNumber,
+                    title = "Para $paraNumber — ${detail.info.transliteration}",
+                    arabicTitle = detail.info.arabicTitle,
+                    subtitle = detail.info.surahRange
+                )
+                withContext(Dispatchers.Main) {
+                    _paraDetail.value = detail
+                    _lastReadBookmark.value = bookmark
+                    _isLoading.value = false
+                    bookmarkManager.saveLastRead(bookmark)
+                }
+            }
         } else {
             _paraDetail.value = null
+            _isLoading.value = false
         }
     }
 
@@ -94,20 +109,26 @@ class QuranViewModel(application: Application) : AndroidViewModel(application) {
         _paraDetail.value = null
 
         if (surahNumber != null) {
-            val detail = QuranRepository.getSurahDetail(context, surahNumber)
-            _surahDetail.value = detail
-
-            val bookmark = LastReadBookmark(
-                mode = ReadMode.SURAH,
-                id = surahNumber,
-                title = "Surah ${detail.info.number} — ${detail.info.transliteration}",
-                arabicTitle = detail.info.arabicName,
-                subtitle = "${detail.info.englishMeaning} • Para ${detail.info.startingPara}"
-            )
-            _lastReadBookmark.value = bookmark
-            bookmarkManager.saveLastRead(bookmark)
+            _isLoading.value = true
+            viewModelScope.launch(Dispatchers.IO) {
+                val detail = QuranRepository.getSurahDetail(context, surahNumber)
+                val bookmark = LastReadBookmark(
+                    mode = ReadMode.SURAH,
+                    id = surahNumber,
+                    title = "Surah ${detail.info.number} — ${detail.info.transliteration}",
+                    arabicTitle = detail.info.arabicName,
+                    subtitle = "${detail.info.englishMeaning} • Para ${detail.info.startingPara}"
+                )
+                withContext(Dispatchers.Main) {
+                    _surahDetail.value = detail
+                    _lastReadBookmark.value = bookmark
+                    _isLoading.value = false
+                    bookmarkManager.saveLastRead(bookmark)
+                }
+            }
         } else {
             _surahDetail.value = null
+            _isLoading.value = false
         }
     }
 
