@@ -93,7 +93,7 @@ fun SettingsSheet(
                     color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
                 ) {
                     Text(
-                        text = "v1.0 Offline",
+                        text = "v1.1",
                         style = MaterialTheme.typography.labelSmall.copy(
                             fontWeight = FontWeight.Bold,
                             fontSize = 11.sp

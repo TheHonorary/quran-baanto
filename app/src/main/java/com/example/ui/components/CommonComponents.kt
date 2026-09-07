@@ -43,16 +43,35 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.R
 
+private val ARABIC_DIGITS_CHARS = charArrayOf('٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩')
+private val AYAH_REGEX = Regex("""^(.*?)\s*(\d+)$""")
+private val PARSED_AYAH_CACHE = java.util.concurrent.ConcurrentHashMap<String, ParsedAyah>()
+
+private val ARABIC_NUMERALS_CACHE: Array<String> = Array(350) { num ->
+    if (num == 0) "٠"
+    else {
+        val str = num.toString()
+        val sb = StringBuilder(str.length)
+        for (ch in str) {
+            if (ch in '0'..'9') sb.append(ARABIC_DIGITS_CHARS[ch - '0']) else sb.append(ch)
+        }
+        sb.toString()
+    }
+}
+
 /**
  * Converts Western ASCII digits (0-9) to standard Arabic-Indic digits (٠-٩).
+ * Uses zero-allocation cached array for standard Ayah numbers (0..349).
  */
 fun toArabicIndicDigits(number: Int): String {
-    val arabicDigits = charArrayOf('٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩')
+    if (number in 0 until 350) {
+        return ARABIC_NUMERALS_CACHE[number]
+    }
     val str = number.toString()
     val sb = StringBuilder(str.length)
     for (ch in str) {
         if (ch in '0'..'9') {
-            sb.append(arabicDigits[ch - '0'])
+            sb.append(ARABIC_DIGITS_CHARS[ch - '0'])
         } else {
             sb.append(ch)
         }
@@ -63,6 +82,7 @@ fun toArabicIndicDigits(number: Int): String {
 /**
  * Parses an Ayah string that may end with a symbol or number like " ۝12" or " 12"
  * and returns the clean verse text along with the integer Ayah number.
+ * Thread-safe cached result prevents redundant string and regex parsing.
  */
 data class ParsedAyah(
     val arabicText: String,
@@ -70,21 +90,25 @@ data class ParsedAyah(
 )
 
 fun parseAyah(rawVerse: String, fallbackNumber: Int): ParsedAyah {
-    val symbolIndex = rawVerse.lastIndexOf('۝')
-    if (symbolIndex >= 0) {
-        val text = rawVerse.substring(0, symbolIndex).trim()
-        val numStr = rawVerse.substring(symbolIndex + 1).trim()
-        val num = numStr.toIntOrNull() ?: fallbackNumber
-        return ParsedAyah(arabicText = text, ayahNumber = num)
+    return PARSED_AYAH_CACHE.getOrPut(rawVerse) {
+        val trimmed = rawVerse.trim()
+        val symbolIndex = trimmed.lastIndexOf('۝')
+        if (symbolIndex >= 0) {
+            val text = trimmed.substring(0, symbolIndex).trim()
+            val numStr = trimmed.substring(symbolIndex + 1).trim()
+            val num = numStr.toIntOrNull() ?: fallbackNumber
+            ParsedAyah(arabicText = text, ayahNumber = num)
+        } else {
+            val match = AYAH_REGEX.find(trimmed)
+            if (match != null) {
+                val text = match.groupValues[1].trim()
+                val num = match.groupValues[2].toIntOrNull() ?: fallbackNumber
+                ParsedAyah(arabicText = text, ayahNumber = num)
+            } else {
+                ParsedAyah(arabicText = trimmed, ayahNumber = fallbackNumber)
+            }
+        }
     }
-    val regex = Regex("""^(.*?)\s*(\d+)$""")
-    val match = regex.find(rawVerse.trim())
-    if (match != null) {
-        val text = match.groupValues[1].trim()
-        val num = match.groupValues[2].toIntOrNull() ?: fallbackNumber
-        return ParsedAyah(arabicText = text, ayahNumber = num)
-    }
-    return ParsedAyah(arabicText = rawVerse.trim(), ayahNumber = fallbackNumber)
 }
 
 /**

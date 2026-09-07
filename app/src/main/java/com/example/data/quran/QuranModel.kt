@@ -65,5 +65,8 @@ data class LastReadBookmark(
     val title: String,
     val arabicTitle: String,
     val subtitle: String,
+    val surahNumber: Int = 1,
+    val ayahNumber: Int = 1,
+    val ayahText: String = "",
     val timestamp: Long = System.currentTimeMillis()
 )

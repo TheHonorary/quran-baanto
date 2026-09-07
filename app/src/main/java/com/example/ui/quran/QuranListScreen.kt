@@ -196,6 +196,25 @@ fun QuranListScreen(
 
             Spacer(modifier = Modifier.height(10.dp))
 
+            // Continue Reading Banner (if bookmark exists and not searching)
+            lastReadBookmark?.let { bm ->
+                if (searchQuery.isBlank()) {
+                    Box(modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp)) {
+                        ContinueReadingCard(
+                            bookmark = bm,
+                            onResume = {
+                                if (bm.mode == ReadMode.PARA) {
+                                    onOpenParaReader(bm.id)
+                                } else {
+                                    onOpenSurahReader(bm.id)
+                                }
+                            }
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+                }
+            }
+
             // Search Bar
             Box(modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)) {
                 OutlinedTextField(

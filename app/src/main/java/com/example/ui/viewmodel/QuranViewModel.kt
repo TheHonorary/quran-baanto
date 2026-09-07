@@ -69,31 +69,36 @@ class QuranViewModel(application: Application) : AndroidViewModel(application) {
     private val _keepScreenOn = MutableStateFlow(bookmarkManager.getKeepScreenOn())
     val keepScreenOn: StateFlow<Boolean> = _keepScreenOn.asStateFlow()
 
-    private val _lastReadBookmark = MutableStateFlow<LastReadBookmark?>(bookmarkManager.getLastRead())
+    private val _allBookmarks = MutableStateFlow<List<LastReadBookmark>>(bookmarkManager.getAllBookmarks())
+    val allBookmarks: StateFlow<List<LastReadBookmark>> = _allBookmarks.asStateFlow()
+
+    private val _lastReadBookmark = MutableStateFlow<LastReadBookmark?>(bookmarkManager.getLatestBookmark())
     val lastReadBookmark: StateFlow<LastReadBookmark?> = _lastReadBookmark.asStateFlow()
 
-    fun selectPara(paraNumber: Int?) {
+    private val _targetScrollAyah = MutableStateFlow<Int?>(null)
+    val targetScrollAyah: StateFlow<Int?> = _targetScrollAyah.asStateFlow()
+
+    fun clearTargetScrollAyah() {
+        _targetScrollAyah.value = null
+    }
+
+    fun selectPara(paraNumber: Int?, targetAyah: Int? = null) {
         _activeReadMode.value = ReadMode.PARA
         _selectedParaNumber.value = paraNumber
         _selectedSurahNumber.value = null
         _surahDetail.value = null
 
+        val matchingBookmark = _allBookmarks.value.firstOrNull { it.mode == ReadMode.PARA && it.id == paraNumber }
+        val effectiveAyah = targetAyah ?: matchingBookmark?.ayahNumber
+        _targetScrollAyah.value = effectiveAyah
+
         if (paraNumber != null) {
             _isLoading.value = true
             viewModelScope.launch(Dispatchers.IO) {
                 val detail = QuranRepository.getParaDetail(context, paraNumber)
-                val bookmark = LastReadBookmark(
-                    mode = ReadMode.PARA,
-                    id = paraNumber,
-                    title = "Para $paraNumber — ${detail.info.transliteration}",
-                    arabicTitle = detail.info.arabicTitle,
-                    subtitle = detail.info.surahRange
-                )
                 withContext(Dispatchers.Main) {
                     _paraDetail.value = detail
-                    _lastReadBookmark.value = bookmark
                     _isLoading.value = false
-                    bookmarkManager.saveLastRead(bookmark)
                 }
             }
         } else {
@@ -102,33 +107,83 @@ class QuranViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun selectSurah(surahNumber: Int?) {
+    fun selectSurah(surahNumber: Int?, targetAyah: Int? = null) {
         _activeReadMode.value = ReadMode.SURAH
         _selectedSurahNumber.value = surahNumber
         _selectedParaNumber.value = null
         _paraDetail.value = null
 
+        val matchingBookmark = _allBookmarks.value.firstOrNull { it.mode == ReadMode.SURAH && it.id == surahNumber }
+        val effectiveAyah = targetAyah ?: matchingBookmark?.ayahNumber
+        _targetScrollAyah.value = effectiveAyah
+
         if (surahNumber != null) {
             _isLoading.value = true
             viewModelScope.launch(Dispatchers.IO) {
                 val detail = QuranRepository.getSurahDetail(context, surahNumber)
-                val bookmark = LastReadBookmark(
-                    mode = ReadMode.SURAH,
-                    id = surahNumber,
-                    title = "Surah ${detail.info.number} — ${detail.info.transliteration}",
-                    arabicTitle = detail.info.arabicName,
-                    subtitle = "${detail.info.englishMeaning} • Para ${detail.info.startingPara}"
-                )
                 withContext(Dispatchers.Main) {
                     _surahDetail.value = detail
-                    _lastReadBookmark.value = bookmark
                     _isLoading.value = false
-                    bookmarkManager.saveLastRead(bookmark)
                 }
             }
         } else {
             _surahDetail.value = null
             _isLoading.value = false
+        }
+    }
+
+    fun bookmarkAyah(
+        mode: ReadMode,
+        id: Int,
+        surahNumber: Int,
+        surahNameEn: String,
+        surahNameAr: String,
+        ayahNumber: Int,
+        ayahText: String
+    ) {
+        val title = if (mode == ReadMode.SURAH) {
+            "Surah $surahNumber: $surahNameEn · Ayah $ayahNumber"
+        } else {
+            "Para $id · $surahNameEn, Ayah $ayahNumber"
+        }
+        val subtitle = if (mode == ReadMode.SURAH) {
+            "Ayah $ayahNumber"
+        } else {
+            "Surah $surahNameEn, Ayah $ayahNumber"
+        }
+        val bookmark = LastReadBookmark(
+            mode = mode,
+            id = id,
+            title = title,
+            arabicTitle = surahNameAr,
+            subtitle = subtitle,
+            surahNumber = surahNumber,
+            ayahNumber = ayahNumber,
+            ayahText = ayahText.take(70),
+            timestamp = System.currentTimeMillis()
+        )
+        bookmarkManager.addOrUpdateBookmark(bookmark)
+        _allBookmarks.value = bookmarkManager.getAllBookmarks()
+        _lastReadBookmark.value = bookmarkManager.getLatestBookmark()
+    }
+
+    fun removeBookmark(mode: ReadMode, id: Int, surahNumber: Int, ayahNumber: Int) {
+        bookmarkManager.removeBookmark(mode, id, surahNumber, ayahNumber)
+        _allBookmarks.value = bookmarkManager.getAllBookmarks()
+        _lastReadBookmark.value = bookmarkManager.getLatestBookmark()
+    }
+
+    fun removeBookmark(bookmark: LastReadBookmark) {
+        removeBookmark(bookmark.mode, bookmark.id, bookmark.surahNumber, bookmark.ayahNumber)
+    }
+
+    fun isAyahBookmarked(mode: ReadMode, id: Int, surahNumber: Int, ayahNumber: Int): Boolean {
+        return _allBookmarks.value.any { b ->
+            if (mode == ReadMode.SURAH) {
+                b.mode == ReadMode.SURAH && b.id == id && b.ayahNumber == ayahNumber
+            } else {
+                b.mode == ReadMode.PARA && b.id == id && b.surahNumber == surahNumber && b.ayahNumber == ayahNumber
+            }
         }
     }
 

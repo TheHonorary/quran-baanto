@@ -9,10 +9,13 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -29,6 +32,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.InlineTextContent
@@ -42,6 +46,8 @@ import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.WbSunny
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -57,10 +63,13 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -68,15 +77,20 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.Placeholder
 import androidx.compose.ui.text.PlaceholderVerticalAlign
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDirection
+import androidx.compose.ui.text.withStyle
+import com.example.ui.components.toArabicIndicDigits
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.quran.ArabicFontStyle
@@ -88,6 +102,7 @@ import com.example.ui.components.AyahEndMarker
 import com.example.ui.components.parseAyah
 import com.example.ui.viewmodel.QuranViewModel
 import com.example.ui.viewmodel.ReadingTheme
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -102,6 +117,7 @@ fun QuranReaderScreen(
     val paraDetail by quranViewModel.paraDetail.collectAsState()
     val selectedSurahNumber by quranViewModel.selectedSurahNumber.collectAsState()
     val surahDetail by quranViewModel.surahDetail.collectAsState()
+    val allBookmarks by quranViewModel.allBookmarks.collectAsState()
     val lastReadBookmark by quranViewModel.lastReadBookmark.collectAsState()
     val isLoading by quranViewModel.isLoading.collectAsState()
 
@@ -109,6 +125,11 @@ fun QuranReaderScreen(
     val readingTheme by quranViewModel.readingTheme.collectAsState()
     val arabicFontStyle by quranViewModel.arabicFontStyle.collectAsState()
     val keepScreenOn by quranViewModel.keepScreenOn.collectAsState()
+    val targetScrollAyah by quranViewModel.targetScrollAyah.collectAsState()
+
+    val haptic = LocalHapticFeedback.current
+    val listState = rememberLazyListState()
+    val coroutineScope = rememberCoroutineScope()
 
     // Immersive toggle: tap canvas to show/hide controls
     var showControls by remember { mutableStateOf(true) }
@@ -137,6 +158,26 @@ fun QuranReaderScreen(
         }
     }
 
+    val isParaMode = activeMode == ReadMode.PARA
+
+    // Auto-scroll directly to the exact bookmarked Ayah
+    LaunchedEffect(targetScrollAyah, paraDetail, surahDetail) {
+        val target = targetScrollAyah ?: return@LaunchedEffect
+        val targetIndex = if (isParaMode && paraDetail != null) {
+            val targetSurah = lastReadBookmark?.surahNumber ?: paraDetail!!.surahSections.firstOrNull()?.surahNumber ?: 1
+            findAyahItemIndexInPara(paraDetail!!, targetSurah, target)
+        } else if (!isParaMode && surahDetail != null) {
+            findAyahItemIndexInSurah(surahDetail!!, target)
+        } else {
+            0
+        }
+
+        if (targetIndex > 0) {
+            listState.scrollToItem(targetIndex)
+        }
+        quranViewModel.clearTargetScrollAyah()
+    }
+
     // Peaceful, high-legibility palette for each reading environment
     val (backgroundColor, textColor, headerBgColor, markerColor) = when (readingTheme) {
         ReadingTheme.DEFAULT -> Quadruple(
@@ -152,20 +193,40 @@ fun QuranReaderScreen(
             Color(0xFF7A562D)  // Warm bronze marker
         )
         ReadingTheme.DARK -> Quadruple(
-            Color(0xFF121615), // Serene night obsidian
-            Color(0xFFDCE2DF), // Soft sage ink
-            Color(0xFF1C2220), // Subtle dark header
-            Color(0xFF74C2A3)  // Soft luminous emerald
+            Color(0xFF111315), // Velvety deep night obsidian
+            Color(0xFFEDEFEF), // Warm soft ivory text
+            Color(0xFF191C20), // Subtle elevated card header
+            Color(0xFFE5C378)  // Luminous noble antique gold marker
         )
     }
 
-    val isParaMode = activeMode == ReadMode.PARA
-
-    val isCurrentBookmarked = if (isParaMode) {
-        lastReadBookmark?.mode == ReadMode.PARA && lastReadBookmark?.id == selectedParaNumber
-    } else {
-        lastReadBookmark?.mode == ReadMode.SURAH && lastReadBookmark?.id == selectedSurahNumber
+    val currentChapterBookmarks = remember(allBookmarks, isParaMode, selectedParaNumber, selectedSurahNumber) {
+        if (isParaMode && selectedParaNumber != null) {
+            allBookmarks.filter { it.mode == ReadMode.PARA && it.id == selectedParaNumber }
+                .sortedWith(compareBy({ it.surahNumber }, { it.ayahNumber }))
+        } else if (!isParaMode && selectedSurahNumber != null) {
+            allBookmarks.filter { it.mode == ReadMode.SURAH && it.id == selectedSurahNumber }
+                .sortedBy { it.ayahNumber }
+        } else {
+            emptyList()
+        }
     }
+
+    val bookmarkedAyahKeys = remember(allBookmarks) {
+        val set = HashSet<String>(allBookmarks.size * 2)
+        for (b in allBookmarks) {
+            if (b.mode == ReadMode.PARA) {
+                set.add("para_${b.id}_s_${b.surahNumber}_a_${b.ayahNumber}")
+            } else {
+                set.add("surah_${b.id}_a_${b.ayahNumber}")
+            }
+        }
+        set
+    }
+
+    val onToggleControls = remember { { showControls = !showControls } }
+
+    var transportBookmarkIndex by remember(currentChapterBookmarks.size) { mutableIntStateOf(-1) }
 
     Scaffold(
         topBar = {
@@ -225,40 +286,84 @@ fun QuranReaderScreen(
                         }
                     },
                     actions = {
-                        // Bookmark button
+                        // Transport to bookmark button
                         IconButton(
                             onClick = {
-                                if (isParaMode && paraDetail != null) {
-                                    val detail = paraDetail!!
-                                    val bookmark = com.example.data.quran.LastReadBookmark(
-                                        mode = ReadMode.PARA,
-                                        id = detail.info.number,
-                                        title = "Para ${detail.info.number} — ${detail.info.transliteration}",
-                                        arabicTitle = detail.info.arabicTitle,
-                                        subtitle = detail.info.surahRange
-                                    )
-                                    quranViewModel.saveBookmark(bookmark)
-                                    Toast.makeText(context, "Bookmarked Para ${detail.info.number}", Toast.LENGTH_SHORT).show()
-                                } else if (!isParaMode && surahDetail != null) {
-                                    val detail = surahDetail!!
-                                    val bookmark = com.example.data.quran.LastReadBookmark(
-                                        mode = ReadMode.SURAH,
-                                        id = detail.info.number,
-                                        title = "Surah ${detail.info.number} — ${detail.info.transliteration}",
-                                        arabicTitle = detail.info.arabicName,
-                                        subtitle = "${detail.info.englishMeaning} • ${detail.info.versesCount} Verses"
-                                    )
-                                    quranViewModel.saveBookmark(bookmark)
-                                    Toast.makeText(context, "Bookmarked Surah ${detail.info.transliteration}", Toast.LENGTH_SHORT).show()
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                if (currentChapterBookmarks.isEmpty()) {
+                                    Toast.makeText(
+                                        context,
+                                        "No bookmarks in this ${if (isParaMode) "Para" else "Surah"} yet.\nLong-press any Ayah to bookmark it.",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                } else if (currentChapterBookmarks.size == 1) {
+                                    val bm = currentChapterBookmarks[0]
+                                    val targetIndex = if (isParaMode && paraDetail != null) {
+                                        findAyahItemIndexInPara(paraDetail!!, bm.surahNumber, bm.ayahNumber)
+                                    } else if (!isParaMode && surahDetail != null) {
+                                        findAyahItemIndexInSurah(surahDetail!!, bm.ayahNumber)
+                                    } else 0
+
+                                    coroutineScope.launch {
+                                        if (targetIndex >= 0) {
+                                            listState.animateScrollToItem(targetIndex)
+                                        }
+                                    }
+                                    Toast.makeText(context, "Transported to Ayah ${bm.ayahNumber}", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    val nextIndex = (transportBookmarkIndex + 1) % currentChapterBookmarks.size
+                                    transportBookmarkIndex = nextIndex
+                                    val bm = currentChapterBookmarks[nextIndex]
+                                    val targetIndex = if (isParaMode && paraDetail != null) {
+                                        findAyahItemIndexInPara(paraDetail!!, bm.surahNumber, bm.ayahNumber)
+                                    } else if (!isParaMode && surahDetail != null) {
+                                        findAyahItemIndexInSurah(surahDetail!!, bm.ayahNumber)
+                                    } else 0
+
+                                    coroutineScope.launch {
+                                        if (targetIndex >= 0) {
+                                            listState.animateScrollToItem(targetIndex)
+                                        }
+                                    }
+                                    Toast.makeText(
+                                        context,
+                                        "Transported to Bookmark ${nextIndex + 1} of ${currentChapterBookmarks.size} (Ayah ${bm.ayahNumber})",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
                                 }
                             },
                             modifier = Modifier.size(40.dp)
                         ) {
-                            Icon(
-                                imageVector = if (isCurrentBookmarked) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
-                                contentDescription = "Bookmark this reading position",
-                                tint = if (isCurrentBookmarked) markerColor else textColor.copy(alpha = 0.65f)
-                            )
+                            if (currentChapterBookmarks.size > 1) {
+                                BadgedBox(
+                                    badge = {
+                                        Badge(
+                                            containerColor = markerColor,
+                                            contentColor = backgroundColor
+                                        ) {
+                                            Text(
+                                                text = "${currentChapterBookmarks.size}",
+                                                style = MaterialTheme.typography.labelSmall.copy(
+                                                    fontWeight = FontWeight.Bold,
+                                                    fontSize = 10.sp
+                                                )
+                                            )
+                                        }
+                                    }
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Bookmark,
+                                        contentDescription = "Transport through bookmarks (${currentChapterBookmarks.size})",
+                                        tint = markerColor
+                                    )
+                                }
+                            } else {
+                                Icon(
+                                    imageVector = if (currentChapterBookmarks.isNotEmpty()) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                                    contentDescription = if (currentChapterBookmarks.isNotEmpty()) "Transport to bookmark" else "No bookmarks in this chapter",
+                                    tint = if (currentChapterBookmarks.isNotEmpty()) markerColor else textColor.copy(alpha = 0.65f)
+                                )
+                            }
                         }
 
                         // Keep Screen On Toggle
@@ -519,26 +624,106 @@ fun QuranReaderScreen(
                     }
                 } else {
                     LazyColumn(
+                        state = listState,
                         contentPadding = PaddingValues(
                             top = if (showControls) innerPadding.calculateTopPadding() + 8.dp else 24.dp,
                             bottom = if (showControls) innerPadding.calculateBottomPadding() + 24.dp else 40.dp,
-                            start = 20.dp,
-                            end = 20.dp
+                            start = 18.dp,
+                            end = 18.dp
                         ),
-                        verticalArrangement = Arrangement.spacedBy(32.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.fillMaxSize()
                     ) {
-                        items(
-                            items = detail.surahSections,
-                            key = { "para_${detail.info.number}_sec_${it.surahNumber}" }
-                        ) { section ->
-                            SurahSectionReaderFlow(
-                                section = section,
-                                fontSizeSp = fontSizeSp,
-                                fontStyle = arabicFontStyle,
-                                textColor = textColor,
-                                markerColor = markerColor
-                            )
+                        detail.surahSections.forEach { section ->
+                            item(key = "para_${detail.info.number}_sec_${section.surahNumber}_hdr") {
+                                ChapterHeaderBanner(
+                                    surahNumber = section.surahNumber,
+                                    surahNameEnglish = section.surahNameEnglish,
+                                    surahNameArabic = section.surahNameArabic,
+                                    subtitle = "Surah ${section.surahNumber}",
+                                    markerColor = markerColor,
+                                    textColor = textColor
+                                )
+
+                                val bismillahText = section.bismillah
+                                if (!bismillahText.isNullOrEmpty()) {
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    Text(
+                                        text = bismillahText,
+                                        style = TextStyle(
+                                            fontSize = (fontSizeSp + 3).sp,
+                                            fontWeight = FontWeight.Bold,
+                                            fontFamily = if (arabicFontStyle == ArabicFontStyle.UTHMANI) FontFamily.Serif else FontFamily.Default,
+                                            textAlign = TextAlign.Center,
+                                            textDirection = TextDirection.Rtl
+                                        ),
+                                        color = textColor,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 8.dp)
+                                    )
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                } else {
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                }
+                            }
+
+                            itemsIndexed(
+                                items = section.verses,
+                                key = { vIdx, _ -> "para_${detail.info.number}_s_${section.surahNumber}_v_$vIdx" }
+                            ) { vIdx, verseStr ->
+                                val parsed = remember(verseStr) { parseAyah(verseStr, fallbackNumber = vIdx + 1) }
+                                val isBookmarked = "para_${detail.info.number}_s_${section.surahNumber}_a_${parsed.ayahNumber}" in bookmarkedAyahKeys
+
+                                AyahReaderItem(
+                                    surahNumber = section.surahNumber,
+                                    ayahNumber = parsed.ayahNumber,
+                                    arabicText = parsed.arabicText,
+                                    fontSizeSp = fontSizeSp,
+                                    fontStyle = arabicFontStyle,
+                                    textColor = textColor,
+                                    markerColor = markerColor,
+                                    isBookmarked = isBookmarked,
+                                    onLongClick = remember(isBookmarked, section.surahNumber, parsed.ayahNumber, parsed.arabicText) {
+                                        {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            if (isBookmarked) {
+                                                quranViewModel.removeBookmark(
+                                                    mode = ReadMode.PARA,
+                                                    id = detail.info.number,
+                                                    surahNumber = section.surahNumber,
+                                                    ayahNumber = parsed.ayahNumber
+                                                )
+                                                Toast.makeText(context, "Bookmark removed for Ayah ${parsed.ayahNumber}", Toast.LENGTH_SHORT).show()
+                                            } else {
+                                                quranViewModel.bookmarkAyah(
+                                                    mode = ReadMode.PARA,
+                                                    id = detail.info.number,
+                                                    surahNumber = section.surahNumber,
+                                                    surahNameEn = section.surahNameEnglish,
+                                                    surahNameAr = section.surahNameArabic,
+                                                    ayahNumber = parsed.ayahNumber,
+                                                    ayahText = parsed.arabicText
+                                                )
+                                                Toast.makeText(context, "Ayah ${parsed.ayahNumber} Bookmarked", Toast.LENGTH_SHORT).show()
+                                            }
+                                        }
+                                    },
+                                    onBookmarkClick = remember(section.surahNumber, parsed.ayahNumber) {
+                                        {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            quranViewModel.removeBookmark(
+                                                mode = ReadMode.PARA,
+                                                id = detail.info.number,
+                                                surahNumber = section.surahNumber,
+                                                ayahNumber = parsed.ayahNumber
+                                            )
+                                            Toast.makeText(context, "Bookmark removed for Ayah ${parsed.ayahNumber}", Toast.LENGTH_SHORT).show()
+                                        }
+                                    },
+                                    onToggleControls = onToggleControls
+                                )
+                            }
                         }
                     }
                 }
@@ -550,13 +735,14 @@ fun QuranReaderScreen(
                     }
                 } else {
                     LazyColumn(
+                        state = listState,
                         contentPadding = PaddingValues(
                             top = if (showControls) innerPadding.calculateTopPadding() + 8.dp else 24.dp,
                             bottom = if (showControls) innerPadding.calculateBottomPadding() + 24.dp else 40.dp,
-                            start = 20.dp,
-                            end = 20.dp
+                            start = 18.dp,
+                            end = 18.dp
                         ),
-                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.fillMaxSize()
                     ) {
                         item(key = "surah_header_${detail.info.number}") {
@@ -572,7 +758,7 @@ fun QuranReaderScreen(
 
                             val bismillahText = detail.bismillah
                             if (!bismillahText.isNullOrEmpty()) {
-                                Spacer(modifier = Modifier.height(16.dp))
+                                Spacer(modifier = Modifier.height(12.dp))
                                 Text(
                                     text = bismillahText,
                                     style = TextStyle(
@@ -585,32 +771,219 @@ fun QuranReaderScreen(
                                     color = textColor,
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(vertical = 10.dp)
+                                        .padding(vertical = 8.dp)
                                 )
-                                Spacer(modifier = Modifier.height(16.dp))
-                            } else {
                                 Spacer(modifier = Modifier.height(12.dp))
+                            } else {
+                                Spacer(modifier = Modifier.height(8.dp))
                             }
                         }
 
-                        // Chunk verses into sets of 12 for smooth, virtualized 60fps scrolling
-                        val verseChunks = detail.verses.chunked(12)
                         itemsIndexed(
-                            items = verseChunks,
-                            key = { idx, _ -> "chunk_${detail.info.number}_$idx" }
-                        ) { chunkIdx, chunkVerses ->
-                            MushafVersesFlow(
-                                rawVerses = chunkVerses,
-                                startingFallbackNumber = (chunkIdx * 12) + 1,
+                            items = detail.verses,
+                            key = { vIdx, _ -> "surah_${detail.info.number}_v_$vIdx" }
+                        ) { vIdx, verseStr ->
+                            val parsed = remember(verseStr) { parseAyah(verseStr, fallbackNumber = vIdx + 1) }
+                            val isBookmarked = "surah_${detail.info.number}_a_${parsed.ayahNumber}" in bookmarkedAyahKeys
+
+                            AyahReaderItem(
+                                surahNumber = detail.info.number,
+                                ayahNumber = parsed.ayahNumber,
+                                arabicText = parsed.arabicText,
                                 fontSizeSp = fontSizeSp,
                                 fontStyle = arabicFontStyle,
                                 textColor = textColor,
-                                markerColor = markerColor
+                                markerColor = markerColor,
+                                isBookmarked = isBookmarked,
+                                onLongClick = remember(isBookmarked, detail.info.number, parsed.ayahNumber, parsed.arabicText) {
+                                    {
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        if (isBookmarked) {
+                                            quranViewModel.removeBookmark(
+                                                mode = ReadMode.SURAH,
+                                                id = detail.info.number,
+                                                surahNumber = detail.info.number,
+                                                ayahNumber = parsed.ayahNumber
+                                            )
+                                            Toast.makeText(context, "Bookmark removed for Ayah ${parsed.ayahNumber}", Toast.LENGTH_SHORT).show()
+                                        } else {
+                                            quranViewModel.bookmarkAyah(
+                                                mode = ReadMode.SURAH,
+                                                id = detail.info.number,
+                                                surahNumber = detail.info.number,
+                                                surahNameEn = detail.info.transliteration,
+                                                surahNameAr = detail.info.arabicName,
+                                                ayahNumber = parsed.ayahNumber,
+                                                ayahText = parsed.arabicText
+                                            )
+                                            Toast.makeText(context, "Ayah ${parsed.ayahNumber} Bookmarked", Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                },
+                                onBookmarkClick = remember(detail.info.number, parsed.ayahNumber) {
+                                    {
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        quranViewModel.removeBookmark(
+                                            mode = ReadMode.SURAH,
+                                            id = detail.info.number,
+                                            surahNumber = detail.info.number,
+                                            ayahNumber = parsed.ayahNumber
+                                        )
+                                        Toast.makeText(context, "Bookmark removed for Ayah ${parsed.ayahNumber}", Toast.LENGTH_SHORT).show()
+                                    }
+                                },
+                                onToggleControls = onToggleControls
                             )
                         }
                     }
                 }
             }
+        }
+    }
+}
+
+private fun findAyahItemIndexInPara(paraDetail: com.example.data.quran.ParaDetail, targetSurah: Int, targetAyah: Int): Int {
+    var currentIndex = 0
+    for (section in paraDetail.surahSections) {
+        currentIndex++ // for section header banner item
+        for ((idx, verseStr) in section.verses.withIndex()) {
+            val parsed = parseAyah(verseStr, fallbackNumber = idx + 1)
+            if (section.surahNumber == targetSurah && parsed.ayahNumber == targetAyah) {
+                return currentIndex
+            }
+            currentIndex++
+        }
+    }
+    return 0
+}
+
+private fun findAyahItemIndexInSurah(surahDetail: SurahDetail, targetAyah: Int): Int {
+    var currentIndex = 1 // index 0 is surah header banner
+    for ((idx, verseStr) in surahDetail.verses.withIndex()) {
+        val parsed = parseAyah(verseStr, fallbackNumber = idx + 1)
+        if (parsed.ayahNumber == targetAyah) {
+            return currentIndex
+        }
+        currentIndex++
+    }
+    return 0
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun AyahReaderItem(
+    surahNumber: Int,
+    ayahNumber: Int,
+    arabicText: String,
+    fontSizeSp: Int,
+    fontStyle: ArabicFontStyle,
+    textColor: Color,
+    markerColor: Color,
+    isBookmarked: Boolean,
+    onLongClick: () -> Unit,
+    onBookmarkClick: () -> Unit,
+    onToggleControls: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val lineHeightVal = if (fontStyle == ArabicFontStyle.INDO_PAK) (fontSizeSp * 2.1).sp else (fontSizeSp * 1.95).sp
+    val letterSpacingVal = if (fontStyle == ArabicFontStyle.INDO_PAK) 0.5.sp else 0.sp
+
+    val annotatedText = remember(arabicText, ayahNumber, markerColor, fontSizeSp) {
+        val digits = toArabicIndicDigits(ayahNumber)
+        buildAnnotatedString {
+            append(arabicText.trim())
+            append("  ")
+            withStyle(
+                SpanStyle(
+                    color = markerColor,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = (fontSizeSp * 0.95f).sp
+                )
+            ) {
+                append("۝")
+                append(digits)
+            }
+        }
+    }
+
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = if (isBookmarked) markerColor.copy(alpha = 0.12f) else Color.Transparent,
+        border = if (isBookmarked) BorderStroke(1.2.dp, markerColor.copy(alpha = 0.65f)) else null,
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .combinedClickable(
+                onLongClick = onLongClick,
+                onClick = {
+                    if (isBookmarked) {
+                        onBookmarkClick()
+                    } else {
+                        onToggleControls()
+                    }
+                }
+            )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(
+                    horizontal = if (isBookmarked) 14.dp else 6.dp,
+                    vertical = if (isBookmarked) 10.dp else 6.dp
+                )
+        ) {
+            if (isBookmarked) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 6.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Bookmark,
+                            contentDescription = "Bookmarked",
+                            tint = markerColor,
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Text(
+                            text = "Bookmarked · Tap to remove",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 11.sp
+                            ),
+                            color = markerColor
+                        )
+                    }
+                    Text(
+                        text = "Ayah $ayahNumber",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 11.sp
+                        ),
+                        color = textColor.copy(alpha = 0.6f)
+                    )
+                }
+            }
+
+            Text(
+                text = annotatedText,
+                style = TextStyle(
+                    fontSize = fontSizeSp.sp,
+                    lineHeight = lineHeightVal,
+                    letterSpacing = letterSpacingVal,
+                    fontFamily = if (fontStyle == ArabicFontStyle.UTHMANI) FontFamily.Serif else FontFamily.Default,
+                    fontWeight = if (fontStyle == ArabicFontStyle.INDO_PAK) FontWeight.Medium else FontWeight.Normal,
+                    textAlign = TextAlign.Right,
+                    textDirection = TextDirection.Rtl
+                ),
+                color = textColor,
+                modifier = Modifier.fillMaxWidth()
+            )
         }
     }
 }
@@ -705,146 +1078,6 @@ private fun OrnamentalHeaderDivider(
             )
         }
     }
-}
-
-@Composable
-private fun SurahSectionReaderFlow(
-    section: SurahSection,
-    fontSizeSp: Int,
-    fontStyle: ArabicFontStyle,
-    textColor: Color,
-    markerColor: Color,
-    modifier: Modifier = Modifier
-) {
-    Column(
-        modifier = modifier.fillMaxWidth(),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        // Chapter Header Banner
-        ChapterHeaderBanner(
-            surahNumber = section.surahNumber,
-            surahNameEnglish = section.surahNameEnglish,
-            surahNameArabic = section.surahNameArabic,
-            subtitle = "Surah ${section.surahNumber}",
-            markerColor = markerColor,
-            textColor = textColor
-        )
-
-        // Bismillah
-        val bismillahText = section.bismillah
-        if (!bismillahText.isNullOrEmpty()) {
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                text = bismillahText,
-                style = TextStyle(
-                    fontSize = (fontSizeSp + 3).sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = if (fontStyle == ArabicFontStyle.UTHMANI) FontFamily.Serif else FontFamily.Default,
-                    textAlign = TextAlign.Center,
-                    textDirection = TextDirection.Rtl
-                ),
-                color = textColor,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 10.dp)
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-        } else {
-            Spacer(modifier = Modifier.height(12.dp))
-        }
-
-        // Continuous Flowing Verses with Integrated Ayah Markers (chunked for smooth rendering)
-        val chunks = section.verses.chunked(12)
-        chunks.forEachIndexed { chunkIndex, chunkVerses ->
-            MushafVersesFlow(
-                rawVerses = chunkVerses,
-                startingFallbackNumber = (chunkIndex * 12) + 1,
-                fontSizeSp = fontSizeSp,
-                fontStyle = fontStyle,
-                textColor = textColor,
-                markerColor = markerColor
-            )
-            if (chunkIndex < chunks.size - 1) {
-                Spacer(modifier = Modifier.height(12.dp))
-            }
-        }
-    }
-}
-
-/**
- * Renders an array of verse strings into a continuous, flowing Mushaf page
- * where each Ayah ends seamlessly with a custom inline Ayah End Marker with Arabic-Indic digits.
- */
-@Composable
-private fun MushafVersesFlow(
-    rawVerses: List<String>,
-    startingFallbackNumber: Int = 1,
-    fontSizeSp: Int,
-    fontStyle: ArabicFontStyle,
-    textColor: Color,
-    markerColor: Color,
-    modifier: Modifier = Modifier
-) {
-    val parsedAyahs = remember(rawVerses, startingFallbackNumber) {
-        rawVerses.mapIndexed { index, verseStr ->
-            parseAyah(verseStr, fallbackNumber = startingFallbackNumber + index)
-        }
-    }
-
-    val lineHeightVal = if (fontStyle == ArabicFontStyle.INDO_PAK) (fontSizeSp * 2.2).sp else (fontSizeSp * 1.95).sp
-    val letterSpacingVal = if (fontStyle == ArabicFontStyle.INDO_PAK) 0.5.sp else 0.sp
-
-    val inlineContentMap = remember(parsedAyahs, fontSizeSp, markerColor, textColor) {
-        val map = mutableMapOf<String, InlineTextContent>()
-        parsedAyahs.forEachIndexed { index, ayah ->
-            val inlineId = "ayah_marker_${ayah.ayahNumber}_$index"
-            map[inlineId] = InlineTextContent(
-                Placeholder(
-                    width = (fontSizeSp * 1.4f).sp,
-                    height = (fontSizeSp * 1.4f).sp,
-                    placeholderVerticalAlign = PlaceholderVerticalAlign.Center
-                )
-            ) {
-                AyahEndMarker(
-                    ayahNumber = ayah.ayahNumber,
-                    fontSizeSp = fontSizeSp,
-                    markerColor = markerColor,
-                    textColor = textColor
-                )
-            }
-        }
-        map
-    }
-
-    val annotatedText = remember(parsedAyahs) {
-        buildAnnotatedString {
-            parsedAyahs.forEachIndexed { index, ayah ->
-                append(ayah.arabicText)
-                append(" ")
-                val inlineId = "ayah_marker_${ayah.ayahNumber}_$index"
-                appendInlineContent(id = inlineId, alternateText = " ۝${ayah.ayahNumber} ")
-                if (index < parsedAyahs.size - 1) {
-                    append("  ")
-                }
-            }
-        }
-    }
-
-    Text(
-        text = annotatedText,
-        inlineContent = inlineContentMap,
-        style = TextStyle(
-            fontSize = fontSizeSp.sp,
-            lineHeight = lineHeightVal,
-            letterSpacing = letterSpacingVal,
-            fontFamily = if (fontStyle == ArabicFontStyle.UTHMANI) FontFamily.Serif else FontFamily.Default,
-            fontWeight = if (fontStyle == ArabicFontStyle.INDO_PAK) FontWeight.Medium else FontWeight.Normal,
-            textAlign = TextAlign.Right,
-            textDirection = TextDirection.Rtl
-        ),
-        color = textColor,
-        modifier = modifier.fillMaxWidth()
-    )
 }
 
 @Composable

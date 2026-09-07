@@ -45,18 +45,35 @@ object QuranRepository {
     private val surahsCache = ConcurrentHashMap<Int, SurahDetail>()
 
     @Volatile
-    private var isInitialized = false
+    private var parasLoaded = false
+    @Volatile
+    private var surahsLoaded = false
 
-    fun initialize(context: Context) {
-        if (!isInitialized) {
-            synchronized(this) {
-                if (!isInitialized) {
+    fun ensureParasLoaded(context: Context) {
+        if (!parasLoaded) {
+            synchronized(parasCache) {
+                if (!parasLoaded) {
                     loadParasFromAssets(context)
-                    loadSurahsFromAssets(context)
-                    isInitialized = true
+                    parasLoaded = true
                 }
             }
         }
+    }
+
+    fun ensureSurahsLoaded(context: Context) {
+        if (!surahsLoaded) {
+            synchronized(surahsCache) {
+                if (!surahsLoaded) {
+                    loadSurahsFromAssets(context)
+                    surahsLoaded = true
+                }
+            }
+        }
+    }
+
+    fun initialize(context: Context) {
+        ensureParasLoaded(context)
+        ensureSurahsLoaded(context)
     }
 
     fun getParaInfo(number: Int): ParaInfo {
@@ -68,12 +85,12 @@ object QuranRepository {
     }
 
     fun getParaDetail(context: Context, number: Int): ParaDetail {
-        initialize(context)
+        ensureParasLoaded(context)
         return parasCache[number] ?: fallbackParaDetail(number)
     }
 
     fun getSurahDetail(context: Context, number: Int): SurahDetail {
-        initialize(context)
+        ensureSurahsLoaded(context)
         return surahsCache[number] ?: fallbackSurahDetail(number)
     }
 
