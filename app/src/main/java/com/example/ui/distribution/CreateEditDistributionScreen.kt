@@ -1,15 +1,16 @@
 package com.example.ui.distribution
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -19,38 +20,29 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
-import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Balance
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Remove
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -62,16 +54,21 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import com.example.data.db.DistributionType
 import com.example.domain.ParticipantAllocation
+import com.example.domain.RotationEngine
+import com.example.ui.components.PrimarySanctuaryButton
+import com.example.ui.components.ResizableSectionContainer
+import com.example.ui.components.SanctuaryTopHeader
+import com.example.ui.components.SecondaryEditorialButton
 import com.example.ui.viewmodel.DistributionViewModel
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun CreateEditDistributionScreen(
     distributionViewModel: DistributionViewModel,
@@ -87,7 +84,7 @@ fun CreateEditDistributionScreen(
     var totalTargetText by remember { mutableStateOf(if (initialType == DistributionType.AMAL) "110" else "30") }
     val participants = remember { mutableStateListOf<ParticipantAllocation>() }
 
-    // Load existing distribution data if editing
+    // Load existing distribution data if editing, or initialize default balanced members
     LaunchedEffect(existingDistributionId, activeState.distribution) {
         if (existingDistributionId != null && activeState.distribution?.id == existingDistributionId) {
             val dist = activeState.distribution!!
@@ -107,21 +104,30 @@ fun CreateEditDistributionScreen(
             }
         } else if (existingDistributionId == null && participants.isEmpty()) {
             if (initialType == DistributionType.AMAL) {
-                distributionName = "Surah Yaseen"
+                distributionName = "Surah Yaseen Circle"
                 totalTargetText = "110"
-                participants.add(ParticipantAllocation(name = "Person 1", count = 20, displayOrder = 1))
-                participants.add(ParticipantAllocation(name = "Person 2", count = 20, displayOrder = 2))
-                participants.add(ParticipantAllocation(name = "Person 3", count = 20, displayOrder = 3))
-                participants.add(ParticipantAllocation(name = "Person 4", count = 20, displayOrder = 4))
-                participants.add(ParticipantAllocation(name = "Person 5", count = 30, displayOrder = 5))
+                val sizes = listOf(22, 22, 22, 22, 22)
+                sizes.forEachIndexed { idx, c ->
+                    participants.add(
+                        ParticipantAllocation(
+                            name = "Member ${idx + 1}",
+                            count = c,
+                            displayOrder = idx + 1
+                        )
+                    )
+                }
             } else {
                 distributionName = "Family Khatm"
                 totalTargetText = "30"
-                participants.add(ParticipantAllocation(name = "Person 1", count = 6, displayOrder = 1))
-                participants.add(ParticipantAllocation(name = "Person 2", count = 6, displayOrder = 2))
-                participants.add(ParticipantAllocation(name = "Person 3", count = 6, displayOrder = 3))
-                participants.add(ParticipantAllocation(name = "Person 4", count = 6, displayOrder = 4))
-                participants.add(ParticipantAllocation(name = "Person 5", count = 6, displayOrder = 5))
+                for (i in 1..5) {
+                    participants.add(
+                        ParticipantAllocation(
+                            name = "Member $i",
+                            count = 6,
+                            displayOrder = i
+                        )
+                    )
+                }
             }
         }
     }
@@ -130,67 +136,102 @@ fun CreateEditDistributionScreen(
     val targetCount = if (isAmal) (totalTargetText.toIntOrNull() ?: 0) else 30
     val totalAllocated = participants.sumOf { it.count }
     val isExactMatch = targetCount > 0 && totalAllocated == targetCount && participants.isNotEmpty()
-    val canSave = distributionName.isNotBlank() && isExactMatch && participants.all { it.name.isNotBlank() && it.count > 0 }
+    val canSave = distributionName.isNotBlank() && isExactMatch &&
+        participants.all { it.name.isNotBlank() && it.count > 0 } &&
+        (!isAmal && participants.size <= 30 || isAmal)
+
+    // Precompute live Month 1 contiguous Para range for each participant in Khatm mode
+    val previewRanges = remember(participants.toList(), isAmal) {
+        if (isAmal) emptyList() else RotationEngine.previewInitialRanges(participants)
+    }
 
     val screenTitle = if (existingDistributionId == null) {
-        if (isAmal) "New Amal" else "New Khatm"
+        if (isAmal) "New Custom Amal" else "New Qur'an Khatm"
     } else {
-        if (isAmal) "Edit Amal" else "Edit Khatm"
+        if (isAmal) "Edit Custom Amal" else "Edit Qur'an Khatm"
     }
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = screenTitle,
-                        style = MaterialTheme.typography.titleLarge.copy(
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = (-0.2).sp
-                        ),
-                        color = MaterialTheme.colorScheme.onBackground
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back"
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background
-                )
+            SanctuaryTopHeader(
+                title = screenTitle,
+                onBack = onBack
             )
         },
         bottomBar = {
             Surface(
                 color = MaterialTheme.colorScheme.surface,
-                shadowElevation = 8.dp
+                border = BorderStroke(0.8.dp, MaterialTheme.colorScheme.outlineVariant),
+                shadowElevation = 10.dp
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 20.dp, vertical = 14.dp)
+                        .padding(horizontal = 20.dp, vertical = 16.dp)
                 ) {
                     if (!isExactMatch) {
                         val unitLabel = if (isAmal) "recitation" else "Para"
                         val unitsLabel = if (isAmal) "recitations" else "Paras"
                         val diff = targetCount - totalAllocated
-                        Text(
-                            text = if (diff > 0) {
-                                "⚠️ Assign $diff more ${if (diff == 1) unitLabel else unitsLabel} to match total ($targetCount)."
-                            } else {
-                                "⚠️ Over-allocated by ${-diff} ${if (-diff == 1) unitLabel else unitsLabel}. Total must equal $targetCount."
-                            },
-                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                            color = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.padding(bottom = 8.dp)
-                        )
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.65f),
+                            border = BorderStroke(0.8.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.4f)),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 12.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Info,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.error,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = if (diff > 0) {
+                                            "Assign $diff more ${if (diff == 1) unitLabel else unitsLabel} to complete $targetCount."
+                                        } else {
+                                            "Reduce by ${-diff} ${if (-diff == 1) unitLabel else unitsLabel} to match $targetCount."
+                                        },
+                                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+                                        color = MaterialTheme.colorScheme.onErrorContainer
+                                    )
+                                }
+                                if (participants.isNotEmpty() && targetCount > 0) {
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Surface(
+                                        onClick = { distributeEvenly(participants, targetCount) },
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = MaterialTheme.colorScheme.primary
+                                    ) {
+                                        Text(
+                                            text = "Balance",
+                                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                            color = MaterialTheme.colorScheme.onPrimary,
+                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
 
-                    Button(
+                    PrimarySanctuaryButton(
+                        text = if (existingDistributionId == null) {
+                            if (isAmal) "Create Amal Session" else "Save Khatm Session"
+                        } else "Save Changes",
+                        icon = Icons.Default.Check,
+                        enabled = canSave,
                         onClick = {
                             if (canSave) {
                                 distributionViewModel.saveDistribution(
@@ -203,95 +244,109 @@ fun CreateEditDistributionScreen(
                                 onBack()
                             }
                         },
-                        enabled = canSave,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(50.dp),
-                        shape = RoundedCornerShape(14.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary
-                        )
-                    ) {
-                        Text(
-                            text = if (existingDistributionId == null) {
-                                if (isAmal) "Create Amal ($targetCount Recitations)" else "Create Khatm (30 Paras)"
-                            } else "Save Changes",
-                            style = MaterialTheme.typography.titleMedium.copy(
-                                fontWeight = FontWeight.Bold
-                            )
-                        )
-                    }
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
             }
         },
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         containerColor = MaterialTheme.colorScheme.background,
         modifier = modifier
     ) { innerPadding ->
-        LazyColumn(
-            contentPadding = PaddingValues(
-                top = innerPadding.calculateTopPadding() + 8.dp,
-                bottom = innerPadding.calculateBottomPadding() + 16.dp,
-                start = 20.dp,
-                end = 20.dp
-            ),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
-                .imePadding()
+                .padding(innerPadding)
         ) {
-            // Distribution Name Field
-            item {
-                OutlinedTextField(
-                    value = distributionName,
-                    onValueChange = { distributionName = it },
-                    label = { Text(if (isAmal) "Amal Name" else "Group / Khatm Name") },
-                    placeholder = {
-                        Text(if (isAmal) "e.g. Surah Yaseen, Ayat al-Kursi" else "e.g. Family Khatm, Ramadan Circle")
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(14.dp),
-                    singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = MaterialTheme.colorScheme.primary,
-                        focusedContainerColor = MaterialTheme.colorScheme.surface,
-                        unfocusedContainerColor = MaterialTheme.colorScheme.surface
-                    )
-                )
-            }
+            val horizontalPad = if (maxWidth >= 640.dp) 32.dp else 22.dp
 
-            // For Amal: Total Recitations Input & Preset Chips
-            if (isAmal) {
-                item {
-                    Surface(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp),
-                        color = MaterialTheme.colorScheme.surface,
-                        border = androidx.compose.foundation.BorderStroke(
-                            width = 0.8.dp,
-                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                        )
+            LazyColumn(
+                contentPadding = PaddingValues(
+                    top = 24.dp,
+                    bottom = 36.dp,
+                    start = horizontalPad,
+                    end = horizontalPad
+                ),
+                verticalArrangement = Arrangement.spacedBy(22.dp),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .imePadding()
+            ) {
+                // 1. Session Identity & Mode Container
+                item(key = "session_details_card") {
+                    ResizableSectionContainer(
+                        title = "Session Details",
+                        contentPadding = PaddingValues(24.dp)
                     ) {
-                        Column(modifier = Modifier.padding(18.dp)) {
-                            Text(
-                                text = "Total Recitations Target",
-                                style = MaterialTheme.typography.labelLarge.copy(
-                                    fontWeight = FontWeight.SemiBold
-                                ),
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Spacer(modifier = Modifier.height(10.dp))
+                        if (existingDistributionId == null) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(bottom = 18.dp),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                ModeTogglePill(
+                                    label = "Qur'an Khatm",
+                                    selected = !isAmal,
+                                    onClick = {
+                                        if (isAmal) {
+                                            distributionType = DistributionType.KHATM
+                                            totalTargetText = "30"
+                                            if (distributionName == "Surah Yaseen Circle") {
+                                                distributionName = "Family Khatm"
+                                            }
+                                            distributeEvenly(participants, 30)
+                                        }
+                                    },
+                                    modifier = Modifier.weight(1f)
+                                )
+                                ModeTogglePill(
+                                    label = "Custom Amal",
+                                    selected = isAmal,
+                                    onClick = {
+                                        if (!isAmal) {
+                                            distributionType = DistributionType.AMAL
+                                            totalTargetText = "110"
+                                            if (distributionName == "Family Khatm") {
+                                                distributionName = "Surah Yaseen Circle"
+                                            }
+                                            distributeEvenly(participants, 110)
+                                        }
+                                    },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                        }
 
+                        OutlinedTextField(
+                            value = distributionName,
+                            onValueChange = { distributionName = it },
+                            label = { Text(if (isAmal) "Amal Title" else "Khatm Name") },
+                            placeholder = {
+                                Text(if (isAmal) "e.g. Surah Yaseen" else "e.g. Family Khatm")
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(14.dp),
+                            singleLine = true,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                focusedContainerColor = MaterialTheme.colorScheme.background,
+                                unfocusedContainerColor = MaterialTheme.colorScheme.background
+                            )
+                        )
+
+                        if (isAmal) {
+                            Spacer(modifier = Modifier.height(16.dp))
                             OutlinedTextField(
                                 value = totalTargetText,
                                 onValueChange = { input ->
-                                    val filtered = input.filter { it.isDigit() }
-                                    totalTargetText = filtered
+                                    totalTargetText = input.filter { it.isDigit() }
                                 },
-                                label = { Text("Total Recitations") },
-                                placeholder = { Text("e.g. 110, 40, 100") },
+                                label = { Text("Total Recitations Target") },
+                                placeholder = { Text("e.g. 110, 40, 100, 1000") },
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                 modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(12.dp),
+                                shape = RoundedCornerShape(14.dp),
                                 singleLine = true,
                                 colors = OutlinedTextFieldDefaults.colors(
                                     focusedBorderColor = MaterialTheme.colorScheme.primary,
@@ -300,27 +355,23 @@ fun CreateEditDistributionScreen(
                                 )
                             )
 
-                            Spacer(modifier = Modifier.height(12.dp))
-
-                            Text(
-                                text = "Common Targets",
-                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(modifier = Modifier.height(6.dp))
+                            Spacer(modifier = Modifier.height(14.dp))
                             FlowRow(
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
                                 verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                listOf(40, 70, 100, 110, 300, 1000).forEach { preset ->
+                                listOf(40, 70, 100, 110, 313, 1000).forEach { target ->
                                     FilterChip(
-                                        selected = targetCount == preset,
-                                        onClick = { totalTargetText = preset.toString() },
-                                        label = { Text("$preset") },
-                                        shape = RoundedCornerShape(8.dp),
+                                        selected = targetCount == target,
+                                        onClick = {
+                                            totalTargetText = target.toString()
+                                            distributeEvenly(participants, target)
+                                        },
+                                        label = { Text("$target") },
+                                        shape = RoundedCornerShape(10.dp),
                                         colors = FilterChipDefaults.filterChipColors(
-                                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                                            labelColor = MaterialTheme.colorScheme.onSurface
+                                            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                            selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
                                         )
                                     )
                                 }
@@ -328,233 +379,227 @@ fun CreateEditDistributionScreen(
                         }
                     }
                 }
-            }
 
-            // Allocation Live Progress Banner
-            item {
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    color = if (isExactMatch) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                    border = androidx.compose.foundation.BorderStroke(
-                        width = 0.8.dp,
-                        color = if (isExactMatch) MaterialTheme.colorScheme.primary.copy(alpha = 0.3f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                    )
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .padding(16.dp)
-                            .fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                // 2. Group Size & Dedicated Action Buttons Container
+                item(key = "group_controls_card") {
+                    ResizableSectionContainer(
+                        title = "Group Setup",
+                        badgeText = "$totalAllocated / $targetCount",
+                        badgeColor = if (isExactMatch) MaterialTheme.colorScheme.primaryContainer
+                        else MaterialTheme.colorScheme.secondaryContainer,
+                        badgeContentColor = if (isExactMatch) MaterialTheme.colorScheme.onPrimaryContainer
+                        else MaterialTheme.colorScheme.onSecondaryContainer,
+                        contentPadding = PaddingValues(24.dp)
                     ) {
-                        Column(modifier = Modifier.weight(1f)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             Text(
-                                text = "ALLOCATION STATUS",
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    letterSpacing = 0.8.sp,
-                                    fontSize = 10.sp
+                                text = "Number of Members",
+                                style = MaterialTheme.typography.titleSmall.copy(
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 15.sp
                                 ),
-                                color = if (isExactMatch) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                color = MaterialTheme.colorScheme.onSurface
                             )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                val unitStr = if (isAmal) "recitations" else "Paras"
-                                Text(
-                                    text = "$totalAllocated / $targetCount $unitStr assigned",
-                                    style = MaterialTheme.typography.titleMedium.copy(
-                                        fontWeight = FontWeight.Bold
-                                    ),
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                if (isExactMatch) {
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Icon(
-                                        imageVector = Icons.Default.Check,
-                                        contentDescription = "Matched",
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(18.dp)
+
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f),
+                                border = BorderStroke(0.8.dp, MaterialTheme.colorScheme.outlineVariant)
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp)
+                                ) {
+                                    IconButton(
+                                        onClick = {
+                                            if (participants.size > 1) {
+                                                participants.removeAt(participants.lastIndex)
+                                                distributeEvenly(participants, targetCount)
+                                            }
+                                        },
+                                        enabled = participants.size > 1,
+                                        modifier = Modifier.size(36.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Remove,
+                                            contentDescription = "Decrease group size",
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                    Text(
+                                        text = "${participants.size}",
+                                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        modifier = Modifier.padding(horizontal = 12.dp)
                                     )
+                                    IconButton(
+                                        onClick = {
+                                            val maxMembers = if (isAmal) 100 else 30
+                                            if (participants.size < maxMembers) {
+                                                val nextNum = participants.size + 1
+                                                participants.add(
+                                                    ParticipantAllocation(
+                                                        name = "Member $nextNum",
+                                                        count = 1,
+                                                        displayOrder = nextNum
+                                                    )
+                                                )
+                                                distributeEvenly(participants, targetCount)
+                                            }
+                                        },
+                                        enabled = participants.size < (if (isAmal) 100 else 30),
+                                        modifier = Modifier.size(36.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Add,
+                                            contentDescription = "Increase group size",
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
                                 }
                             }
                         }
 
-                        // Auto divide evenly button
-                        if (participants.isNotEmpty() && targetCount > 0) {
-                            OutlinedButton(
+                        Spacer(modifier = Modifier.height(20.dp))
+
+                        // Each button in its own designated clean space
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(14.dp)
+                        ) {
+                            SecondaryEditorialButton(
+                                text = "Balance Equally",
+                                icon = Icons.Default.Balance,
                                 onClick = {
-                                    distributeEvenly(participants, targetCount)
+                                    if (participants.isNotEmpty() && targetCount > 0) {
+                                        distributeEvenly(participants, targetCount)
+                                    }
                                 },
-                                shape = RoundedCornerShape(10.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.AutoAwesome,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(text = "Auto Divide", style = MaterialTheme.typography.labelSmall)
-                            }
+                                modifier = Modifier.weight(1f)
+                            )
+
+                            PrimarySanctuaryButton(
+                                text = "Add Member",
+                                icon = Icons.Default.PersonAdd,
+                                onClick = {
+                                    val defaultCount = if (isAmal) {
+                                        val remaining = targetCount - totalAllocated
+                                        if (remaining > 0) remaining else 1
+                                    } else {
+                                        val remaining = 30 - totalAllocated
+                                        if (remaining > 0) remaining else 1
+                                    }
+                                    participants.add(
+                                        ParticipantAllocation(
+                                            name = "Member ${participants.size + 1}",
+                                            count = defaultCount,
+                                            displayOrder = participants.size + 1
+                                        )
+                                    )
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
                         }
                     }
                 }
-            }
 
-            // Quick Preset Templates for Khatm (if starting new Khatm)
-            if (!isAmal && existingDistributionId == null) {
-                item {
-                    Column {
+                // 3. Members List Section Header
+                item(key = "members_header") {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 4.dp)
+                    ) {
                         Text(
-                            text = "Quick Presets",
-                            style = MaterialTheme.typography.labelMedium.copy(
-                                fontWeight = FontWeight.SemiBold
+                            text = "Members (${participants.size})",
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 18.sp
                             ),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onBackground
                         )
                         Spacer(modifier = Modifier.height(6.dp))
-                        FlowRow(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            PresetChip("5 people (6 each)") {
-                                applyPreset(participants, 5, 6)
-                            }
-                            PresetChip("6 people (5 each)") {
-                                applyPreset(participants, 6, 5)
-                            }
-                            PresetChip("10 people (3 each)") {
-                                applyPreset(participants, 10, 3)
-                            }
-                            PresetChip("30 people (1 each)") {
-                                applyPreset(participants, 30, 1)
-                            }
-                        }
+                        HorizontalDivider(
+                            thickness = 0.8.dp,
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f)
+                        )
                     }
                 }
-            }
 
-            // Participant Header
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "Participants (${participants.size})",
-                        style = MaterialTheme.typography.titleMedium.copy(
-                            fontWeight = FontWeight.Bold
-                        ),
-                        color = MaterialTheme.colorScheme.onBackground
-                    )
-
-                    Button(
-                        onClick = {
-                            val defaultCount = if (isAmal) {
-                                val remaining = targetCount - totalAllocated
-                                if (remaining > 0) remaining else 1
-                            } else {
-                                val remaining = 30 - totalAllocated
-                                if (remaining > 0) remaining else 1
-                            }
-                            participants.add(
-                                ParticipantAllocation(
-                                    name = "Person ${participants.size + 1}",
-                                    count = defaultCount,
-                                    displayOrder = participants.size + 1
-                                )
-                            )
+                // 4. Individual Member Cards with generous breathing room
+                itemsIndexed(
+                    items = participants,
+                    key = { _, item -> item.uid }
+                ) { index, participant ->
+                    val rangePreview = previewRanges.getOrNull(index)
+                    ParticipantRowItem(
+                        orderNumber = index + 1,
+                        participant = participant,
+                        isAmal = isAmal,
+                        contiguousRangePreview = rangePreview,
+                        onNameChange = { newName ->
+                            participants[index] = participant.copy(name = newName)
                         },
-                        shape = RoundedCornerShape(10.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer,
-                            contentColor = MaterialTheme.colorScheme.primary
-                        )
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Add,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Add Person", style = MaterialTheme.typography.labelMedium)
-                    }
+                        onCountChange = { newCount ->
+                            val maxCount = if (isAmal) maxOf(targetCount, 10000) else 30
+                            val clamped = newCount.coerceIn(1, maxCount)
+                            participants[index] = participant.copy(count = clamped)
+                        },
+                        onMoveUp = if (index > 0) {
+                            {
+                                val item = participants.removeAt(index)
+                                participants.add(index - 1, item)
+                            }
+                        } else null,
+                        onMoveDown = if (index < participants.size - 1) {
+                            {
+                                val item = participants.removeAt(index)
+                                participants.add(index + 1, item)
+                            }
+                        } else null,
+                        onRemove = {
+                            if (participants.size > 1) {
+                                participants.removeAt(index)
+                            }
+                        },
+                        canDelete = participants.size > 1
+                    )
                 }
-            }
-
-            // Participant list items
-            itemsIndexed(
-                items = participants,
-                key = { _, item -> item.uid }
-            ) { index, participant ->
-                ParticipantRowItem(
-                    orderNumber = index + 1,
-                    participant = participant,
-                    isAmal = isAmal,
-                    onNameChange = { newName ->
-                        participants[index] = participant.copy(name = newName)
-                    },
-                    onCountChange = { newCount ->
-                        val maxCount = if (isAmal) maxOf(targetCount, 10000) else 30
-                        val clamped = newCount.coerceIn(1, maxCount)
-                        participants[index] = participant.copy(count = clamped)
-                    },
-                    onMoveUp = if (index > 0) {
-                        {
-                            val item = participants.removeAt(index)
-                            participants.add(index - 1, item)
-                        }
-                    } else null,
-                    onMoveDown = if (index < participants.size - 1) {
-                        {
-                            val item = participants.removeAt(index)
-                            participants.add(index + 1, item)
-                        }
-                    } else null,
-                    onRemove = {
-                        if (participants.size > 1) {
-                            participants.removeAt(index)
-                        }
-                    },
-                    canDelete = participants.size > 1
-                )
             }
         }
     }
 }
 
 @Composable
-private fun PresetChip(
+private fun ModeTogglePill(
     label: String,
-    onClick: () -> Unit
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    FilterChip(
-        selected = false,
+    Surface(
         onClick = onClick,
-        label = { Text(label, style = MaterialTheme.typography.labelSmall) },
-        shape = RoundedCornerShape(8.dp),
-        colors = FilterChipDefaults.filterChipColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-            labelColor = MaterialTheme.colorScheme.onSurface
-        )
-    )
-}
-
-private fun applyPreset(
-    participants: SnapshotStateList<ParticipantAllocation>,
-    count: Int,
-    countPerPerson: Int
-) {
-    participants.clear()
-    for (i in 1..count) {
-        participants.add(
-            ParticipantAllocation(
-                name = "Person $i",
-                count = countPerPerson,
-                displayOrder = i
+        shape = RoundedCornerShape(12.dp),
+        color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+        border = BorderStroke(
+            width = 1.dp,
+            color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
+        ),
+        modifier = modifier.height(44.dp)
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelLarge.copy(
+                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
+                ),
+                color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
             )
-        )
+        }
     }
 }
 
@@ -578,6 +623,7 @@ private fun ParticipantRowItem(
     orderNumber: Int,
     participant: ParticipantAllocation,
     isAmal: Boolean,
+    contiguousRangePreview: IntRange?,
     onNameChange: (String) -> Unit,
     onCountChange: (Int) -> Unit,
     onMoveUp: (() -> Unit)?,
@@ -590,22 +636,32 @@ private fun ParticipantRowItem(
 
     if (showManualInputDialog) {
         var typedValue by remember { mutableStateOf(participant.count.toString()) }
-        AlertDialog(
-            onDismissRequest = { showManualInputDialog = false },
-            title = {
-                Text(
-                    text = "Set Allocation for ${participant.name.ifBlank { "Person $orderNumber" }}",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                )
-            },
-            text = {
-                Column {
+        Dialog(onDismissRequest = { showManualInputDialog = false }) {
+            Surface(
+                shape = RoundedCornerShape(22.dp),
+                color = MaterialTheme.colorScheme.surface,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary.copy(alpha = 0.5f)),
+                tonalElevation = 8.dp
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(24.dp)
+                ) {
                     Text(
-                        text = if (isAmal) "Type the exact target recitations:" else "Type the exact number of Paras (1–30):",
-                        style = MaterialTheme.typography.bodyMedium,
+                        text = participant.name.ifBlank { "Member $orderNumber" },
+                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = if (isAmal) "Enter target recitations for this member:"
+                        else "Enter contiguous Para count (1–30):",
+                        style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
+
                     OutlinedTextField(
                         value = typedValue,
                         onValueChange = { input ->
@@ -616,186 +672,205 @@ private fun ParticipantRowItem(
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.fillMaxWidth()
                     )
-                    Spacer(modifier = Modifier.height(10.dp))
-                    // Quick adjustment chips
+
+                    Spacer(modifier = Modifier.height(20.dp))
+
                     Row(
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        listOf(1, 5, 10, 20).forEach { delta ->
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
-                                modifier = Modifier.clickable {
-                                    val current = typedValue.toIntOrNull() ?: participant.count
-                                    typedValue = (current + delta).toString()
+                        SecondaryEditorialButton(
+                            text = "Cancel",
+                            onClick = { showManualInputDialog = false },
+                            modifier = Modifier.weight(1f)
+                        )
+                        PrimarySanctuaryButton(
+                            text = "Apply",
+                            onClick = {
+                                val entered = typedValue.toIntOrNull()
+                                if (entered != null && entered > 0) {
+                                    onCountChange(entered)
                                 }
-                            ) {
-                                Text(
-                                    text = "+$delta",
-                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                    color = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                )
-                            }
-                        }
+                                showManualInputDialog = false
+                            },
+                            modifier = Modifier.weight(1f)
+                        )
                     }
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        val entered = typedValue.toIntOrNull()
-                        if (entered != null && entered > 0) {
-                            onCountChange(entered)
-                        }
-                        showManualInputDialog = false
-                    }
-                ) {
-                    Text("Apply")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showManualInputDialog = false }) {
-                    Text("Cancel")
                 }
             }
-        )
+        }
     }
 
     Surface(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(18.dp),
         color = MaterialTheme.colorScheme.surface,
-        border = androidx.compose.foundation.BorderStroke(
-            width = 0.8.dp,
-            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-        )
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
     ) {
-        Row(
+        Column(
             modifier = Modifier
-                .padding(horizontal = 12.dp, vertical = 10.dp)
-                .fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
+                .fillMaxWidth()
+                .padding(horizontal = 18.dp, vertical = 16.dp)
         ) {
-            // Order number badge & re-order controls (uniform 1:1 aspect ratio buttons)
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
-            ) {
-                IconButton(
-                    onClick = { onMoveUp?.invoke() },
-                    enabled = onMoveUp != null,
-                    modifier = Modifier.size(24.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.ArrowUpward,
-                        contentDescription = "Move Up",
-                        tint = if (onMoveUp != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
-                        modifier = Modifier.size(14.dp)
-                    )
-                }
-
-                Text(
-                    text = "#$orderNumber",
-                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 10.sp),
-                    color = MaterialTheme.colorScheme.primary
-                )
-
-                IconButton(
-                    onClick = { onMoveDown?.invoke() },
-                    enabled = onMoveDown != null,
-                    modifier = Modifier.size(24.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.ArrowDownward,
-                        contentDescription = "Move Down",
-                        tint = if (onMoveDown != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
-                        modifier = Modifier.size(14.dp)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-            // Name Field
-            OutlinedTextField(
-                value = participant.name,
-                onValueChange = onNameChange,
-                modifier = Modifier.weight(1f),
-                placeholder = { Text("Name") },
-                singleLine = true,
-                shape = RoundedCornerShape(10.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = MaterialTheme.colorScheme.primary,
-                    unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
-                )
-            )
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-            // Count Stepper & Input with tap-to-type capability
-            val stepDelta = if (isAmal && participant.count >= 20) 5 else 1
             Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
-                    .padding(horizontal = 2.dp, vertical = 2.dp)
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(
-                    onClick = { onCountChange(participant.count - stepDelta) },
-                    modifier = Modifier.size(28.dp)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Remove,
-                        contentDescription = "Decrease",
-                        modifier = Modifier.size(14.dp)
-                    )
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer
+                    ) {
+                        Text(
+                            text = "#$orderNumber",
+                            style = MaterialTheme.typography.labelMedium.copy(
+                                fontWeight = FontWeight.Bold
+                            ),
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                        )
+                    }
+
+                    if (!isAmal && contiguousRangePreview != null) {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f)
+                        ) {
+                            Text(
+                                text = "Para ${contiguousRangePreview.toList().joinToString(", ")}",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 11.sp
+                                ),
+                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
                 }
 
-                // Clickable count badge: allows typing exact value
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(6.dp))
-                        .clickable { showManualInputDialog = true }
-                        .padding(horizontal = 6.dp, vertical = 3.dp),
-                    contentAlignment = Alignment.Center
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Text(
-                        text = if (isAmal) "${participant.count}" else "${participant.count} p",
-                        style = MaterialTheme.typography.labelMedium.copy(
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 12.sp
-                        ),
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
-
-                IconButton(
-                    onClick = { onCountChange(participant.count + stepDelta) },
-                    modifier = Modifier.size(28.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = "Increase",
-                        modifier = Modifier.size(14.dp)
-                    )
+                    IconButton(
+                        onClick = { onMoveUp?.invoke() },
+                        enabled = onMoveUp != null,
+                        modifier = Modifier.size(34.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ArrowUpward,
+                            contentDescription = "Move Up",
+                            tint = if (onMoveUp != null) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                    IconButton(
+                        onClick = { onMoveDown?.invoke() },
+                        enabled = onMoveDown != null,
+                        modifier = Modifier.size(34.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ArrowDownward,
+                            contentDescription = "Move Down",
+                            tint = if (onMoveDown != null) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                    if (canDelete) {
+                        IconButton(
+                            onClick = onRemove,
+                            modifier = Modifier.size(34.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = "Remove participant",
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
                 }
             }
 
-            if (canDelete) {
-                Spacer(modifier = Modifier.width(4.dp))
-                IconButton(
-                    onClick = onRemove,
-                    modifier = Modifier.size(28.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Delete,
-                        contentDescription = "Remove participant",
-                        tint = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.size(16.dp)
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedTextField(
+                    value = participant.name,
+                    onValueChange = onNameChange,
+                    modifier = Modifier.weight(1f),
+                    placeholder = { Text("Member Name") },
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+                        focusedContainerColor = MaterialTheme.colorScheme.background,
+                        unfocusedContainerColor = MaterialTheme.colorScheme.background
                     )
+                )
+
+                Spacer(modifier = Modifier.width(12.dp))
+
+                val stepDelta = if (isAmal && participant.count >= 20) 5 else 1
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f),
+                    border = BorderStroke(0.8.dp, MaterialTheme.colorScheme.outlineVariant)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)
+                    ) {
+                        IconButton(
+                            onClick = { onCountChange(participant.count - stepDelta) },
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Remove,
+                                contentDescription = "Decrease",
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+
+                        Surface(
+                            onClick = { showManualInputDialog = true },
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.surface,
+                            border = BorderStroke(0.6.dp, MaterialTheme.colorScheme.outlineVariant)
+                        ) {
+                            Text(
+                                text = if (isAmal) "${participant.count}" else "${participant.count} ${if (participant.count == 1) "Para" else "Paras"}",
+                                style = MaterialTheme.typography.labelMedium.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 12.sp
+                                ),
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp)
+                            )
+                        }
+
+                        IconButton(
+                            onClick = { onCountChange(participant.count + stepDelta) },
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Add,
+                                contentDescription = "Increase",
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
                 }
             }
         }

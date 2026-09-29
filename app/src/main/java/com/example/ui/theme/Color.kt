@@ -2,53 +2,62 @@ package com.example.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Calm, peaceful Emerald & Warm Sand Artistic Flair Palette for Quran Baanto
-val EmeraldPrimary = Color(0xFF1B4D3E)
+// ============================================================================
+// LIGHT PALETTE — Warm Illuminated Parchment & Deep Sanctuary Teal
+// ============================================================================
+val ParchmentBackground = Color(0xFFFBF8F1)
+val ParchmentSurface = Color(0xFFF4EFE4)
+val ParchmentSurfaceElevated = Color(0xFFFFFFFF)
+val ParchmentSurfaceVariant = Color(0xFFEBE3D3)
+
+val EmeraldPrimary = Color(0xFF144538)
 val EmeraldOnPrimary = Color(0xFFFFFFFF)
-val EmeraldPrimaryContainer = Color(0xFFE7F0ED)
-val EmeraldOnPrimaryContainer = Color(0xFF1B4D3E)
+val EmeraldPrimaryContainer = Color(0xFFD8EAE3)
+val EmeraldOnPrimaryContainer = Color(0xFF0A2920)
 
-val SageSecondary = Color(0xFF5C726A)
-val SageOnSecondary = Color(0xFFFFFFFF)
-val SageSecondaryContainer = Color(0xFFD1E1DB)
-val SageOnSecondaryContainer = Color(0xFF1B4D3E)
+val BrassSecondary = Color(0xFF9C6D27)
+val BrassOnSecondary = Color(0xFFFFFFFF)
+val BrassSecondaryContainer = Color(0xFFF6E7C8)
+val BrassOnSecondaryContainer = Color(0xFF3A2504)
 
-val SandTertiary = Color(0xFF705D38)
-val SandOnTertiary = Color(0xFFFFFFFF)
-val SandTertiaryContainer = Color(0xFFF5F1EA)
-val SandOnTertiaryContainer = Color(0xFF1C1B17)
+val LapisTertiary = Color(0xFF284B63)
+val LapisOnTertiary = Color(0xFFFFFFFF)
+val LapisTertiaryContainer = Color(0xFFD9E7F2)
+val LapisOnTertiaryContainer = Color(0xFF0E2433)
 
-val WarmBackgroundLight = Color(0xFFFDFCF9)
-val WarmOnBackgroundLight = Color(0xFF1C1B17)
-val WarmSurfaceLight = Color(0xFFFFFFFF)
-val WarmOnSurfaceLight = Color(0xFF1C1B17)
-val WarmSurfaceVariantLight = Color(0xFFF5F1EA)
-val WarmOnSurfaceVariantLight = Color(0xFF797770)
-val WarmOutlineLight = Color(0xFFA8A59E)
-val WarmOutlineVariantLight = Color(0xFFEBE6DD)
+val InkTextPrimary = Color(0xFF1C201E)
+val InkTextSecondary = Color(0xFF565E5A)
+val WarmOutline = Color(0xFFC9BFA8)
+val WarmOutlineVariant = Color(0xFFDFD6C3)
 
-// Dark Palette - Dignified, deep velvety obsidian with calm natural emerald and antique gold accents
-val EmeraldPrimaryDark = Color(0xFF48BB78) // Gentle, noble botanical emerald (no neon strain)
-val EmeraldOnPrimaryDark = Color(0xFF092A18)
-val EmeraldPrimaryContainerDark = Color(0xFF163C29)
-val EmeraldOnPrimaryContainerDark = Color(0xFF86EFAC)
+// ============================================================================
+// DARK PALETTE — Refined Midnight Slate & Warm Champagne Brass (No Black/Green)
+// ============================================================================
+val MidnightBackground = Color(0xFF12151E)
+val MidnightSurface = Color(0xFF1A1E2B)
+val MidnightSurfaceElevated = Color(0xFF222838)
+val MidnightSurfaceVariant = Color(0xFF262C3D)
 
-val SageSecondaryDark = Color(0xFF8BB5A5)
-val SageOnSecondaryDark = Color(0xFF142E24)
-val SageSecondaryContainerDark = Color(0xFF244438)
-val SageOnSecondaryContainerDark = Color(0xFFC7E4D9)
+val DarkGoldPrimary = Color(0xFFE5C178)
+val DarkGoldOnPrimary = Color(0xFF241A04)
+val DarkGoldPrimaryContainer = Color(0xFF382F1B)
+val DarkGoldOnPrimaryContainer = Color(0xFFF9E4B7)
 
-val SandTertiaryDark = Color(0xFFE5C378) // Noble antique gold / sand accent
-val SandOnTertiaryDark = Color(0xFF3B2F07)
-val SandTertiaryContainerDark = Color(0xFF4D3B0C)
-val SandOnTertiaryContainerDark = Color(0xFFFDE68A)
+val DarkSlateSecondary = Color(0xFF9AB0CF)
+val DarkSlateOnSecondary = Color(0xFF132033)
+val DarkSlateSecondaryContainer = Color(0xFF253247)
+val DarkSlateOnSecondaryContainer = Color(0xFFD8E4F7)
 
-val WarmBackgroundDark = Color(0xFF111315) // Deep, restful night obsidian
-val WarmOnBackgroundDark = Color(0xFFEDEDF0)
-val WarmSurfaceDark = Color(0xFF191C20) // Elevated, clean card surface
-val WarmOnSurfaceDark = Color(0xFFEDEDF0)
-val WarmSurfaceVariantDark = Color(0xFF22262C)
-val WarmOnSurfaceVariantDark = Color(0xFFA2ABB5)
-val WarmOutlineDark = Color(0xFF424A54)
-val WarmOutlineVariantDark = Color(0xFF2B313A)
+val DarkAmberTertiary = Color(0xFFD99B66)
+val DarkAmberOnTertiary = Color(0xFF2D1604)
+val DarkAmberTertiaryContainer = Color(0xFF422711)
+val DarkAmberOnTertiaryContainer = Color(0xFFFADCC3)
 
+val IvoryTextPrimary = Color(0xFFF3F0E8)
+val IvoryTextSecondary = Color(0xFFA7B0C0)
+val DarkWarmOutline = Color(0xFF3D4559)
+val DarkWarmOutlineVariant = Color(0xFF2B3142)
+
+// Semantic Status Colors
+val ErrorCrimson = Color(0xFFB3261E)
+val ErrorCrimsonDark = Color(0xFFF2B8B5)

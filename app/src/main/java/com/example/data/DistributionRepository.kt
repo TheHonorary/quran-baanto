@@ -13,6 +13,8 @@ class DistributionRepository(private val dao: DistributionDao) {
 
     val allDistributions: Flow<List<DistributionEntity>> = dao.getAllDistributions()
 
+    val allParticipants: Flow<List<ParticipantEntity>> = dao.getAllParticipants()
+
     fun getDistribution(id: Long): Flow<DistributionEntity?> = dao.getDistributionByIdFlow(id)
 
     fun getParticipants(distributionId: Long): Flow<List<ParticipantEntity>> =

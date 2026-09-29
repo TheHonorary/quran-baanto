@@ -21,6 +21,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.util.Calendar
@@ -44,61 +46,50 @@ data class ActiveDistributionUiState(
     val hijriMonthName: String
         get() = dateInfo.hijriFullText
 
+    val cycleNumber: Int
+        get() {
+            val dist = distribution ?: return 1
+            val offset = (selectedYear - dist.startYear) * 12 + (selectedMonth - dist.startMonth)
+            return offset + 1
+        }
+
     val shareText: String
         get() {
-            if (distribution == null || participants.isEmpty()) return ""
-
-            if (isAmal) {
-                val sb = StringBuilder()
-                sb.append("${distribution.name} — ${distribution.totalTarget} Recitations\n\n")
-                sb.append("🤲 Amal Distribution\n\n")
-                participants.sortedBy { it.displayOrder }.forEach { p ->
-                    sb.append("${p.name} — ${p.allocatedCount} recitations\n")
-                }
-                sb.append("\nMay Allah accept everyone's recitation. 🤲\n")
-                return sb.toString().trimEnd()
-            }
-
-            // Khatm Share format: Organized based on the Paras (1..30)
-            if (assignments.isEmpty()) return ""
-            val info = dateInfo
-            val sb = StringBuilder()
-            sb.append("✨ ${distribution.name}\n")
-            sb.append("📅 ${info.gregorianFullText} • ${info.hijriFullText}\n")
-            sb.append("📖 Qur'an Monthly Para Distribution (30 Paras)\n")
-            sb.append("─────────────────────────\n\n")
-
-            // Organized based on the paras
-            val sortedByParas = assignments.sortedWith(
-                compareBy<ParaAssignment> { it.startPara }.thenBy { it.endPara }
+            val dist = distribution ?: return ""
+            return DistributionViewModel.formatDistributionShareSummary(
+                distribution = dist,
+                participants = participants,
+                assignments = assignments,
+                targetYear = selectedYear,
+                targetMonth = selectedMonth
             )
-
-            sortedByParas.forEach { assignment ->
-                sb.append("${assignment.participantName}: ${assignment.commaSeparatedParas}\n")
-            }
-
-            sb.append("\n─────────────────────────\n")
-            sb.append("May Allah accept everyone's recitation. 🤲\n")
-            sb.append("Organized via Quran Baanto")
-            return sb.toString()
         }
 }
 
 class DistributionViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val repository: DistributionRepository
+    private val repository: DistributionRepository =
+        DistributionRepository(AppDatabase.getDatabase(application).distributionDao())
 
-    init {
-        val database = AppDatabase.getDatabase(application)
-        repository = DistributionRepository(database.distributionDao())
-    }
+    private val _isLoadingDistributions = MutableStateFlow(true)
+    val isLoadingDistributions: StateFlow<Boolean> = _isLoadingDistributions.asStateFlow()
 
     val distributions: StateFlow<List<DistributionEntity>> = repository.allDistributions
+        .onEach { _isLoadingDistributions.value = false }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = emptyList()
         )
+
+    val participantsByDistribution: StateFlow<Map<Long, List<ParticipantEntity>>> =
+        repository.allParticipants
+            .map { list -> list.groupBy { it.distributionId } }
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5000),
+                initialValue = emptyMap()
+            )
 
     private val _selectedDistributionId = MutableStateFlow<Long?>(null)
     val selectedDistributionId: StateFlow<Long?> = _selectedDistributionId.asStateFlow()
@@ -136,6 +127,53 @@ class DistributionViewModel(application: Application) : AndroidViewModel(applica
         _selectedMonth.value = Calendar.getInstance().get(Calendar.MONTH) + 1
     }
 
+    fun computeAssignmentsForDistribution(
+        distribution: DistributionEntity,
+        participants: List<ParticipantEntity>,
+        targetYear: Int = Calendar.getInstance().get(Calendar.YEAR),
+        targetMonth: Int = Calendar.getInstance().get(Calendar.MONTH) + 1
+    ): List<ParaAssignment> {
+        if (distribution.type == DistributionType.AMAL || participants.isEmpty()) {
+            return emptyList()
+        }
+        val allocs = participants.map {
+            ParticipantAllocation(
+                id = it.id,
+                name = it.name,
+                count = it.allocatedCount,
+                displayOrder = it.displayOrder
+            )
+        }
+        return RotationEngine.calculateAssignments(
+            participants = allocs,
+            startYear = distribution.startYear,
+            startMonth = distribution.startMonth,
+            targetYear = targetYear,
+            targetMonth = targetMonth
+        )
+    }
+
+    fun generateShareSummaryForDistribution(
+        distribution: DistributionEntity,
+        participants: List<ParticipantEntity>,
+        targetYear: Int = Calendar.getInstance().get(Calendar.YEAR),
+        targetMonth: Int = Calendar.getInstance().get(Calendar.MONTH) + 1
+    ): String {
+        val assignments = computeAssignmentsForDistribution(
+            distribution = distribution,
+            participants = participants,
+            targetYear = targetYear,
+            targetMonth = targetMonth
+        )
+        return formatDistributionShareSummary(
+            distribution = distribution,
+            participants = participants,
+            assignments = assignments,
+            targetYear = targetYear,
+            targetMonth = targetMonth
+        )
+    }
+
     @OptIn(ExperimentalCoroutinesApi::class)
     val activeDistributionState: StateFlow<ActiveDistributionUiState> = _selectedDistributionId
         .flatMapLatest { id ->
@@ -150,16 +188,17 @@ class DistributionViewModel(application: Application) : AndroidViewModel(applica
                     if (dist == null || participants.isEmpty()) {
                         ActiveDistributionUiState(dist, participants, year, month)
                     } else if (dist.type == DistributionType.AMAL) {
-                        // Amal: No monthly rotation, fixed configured recitation distribution
                         ActiveDistributionUiState(
                             distribution = dist,
-                            participants = participants.sortedBy { it.displayOrder },
+                            participants = participants.sortedWith(
+                                compareBy<ParticipantEntity> { it.displayOrder }
+                                    .thenBy { it.name.lowercase() }
+                            ),
                             selectedYear = year,
                             selectedMonth = month,
                             assignments = emptyList()
                         )
                     } else {
-                        // Khatm: 30-Para fair rotation algorithm
                         val allocs = participants.map {
                             ParticipantAllocation(
                                 id = it.id,
@@ -218,6 +257,62 @@ class DistributionViewModel(application: Application) : AndroidViewModel(applica
             }
         }
     }
+
+    companion object {
+        /**
+         * Formats the distribution progress and monthly schedule summary for sharing via messaging apps.
+         *
+         * Strictly orders all Khatm allocations from Para 1 to Para 30, then by participant name,
+         * with Para numbers first on each line:
+         * 1, 2: XYZ
+         * 3, 4, 5: ABC
+         */
+        fun formatDistributionShareSummary(
+            distribution: DistributionEntity,
+            participants: List<ParticipantEntity>,
+            assignments: List<ParaAssignment>,
+            targetYear: Int,
+            targetMonth: Int
+        ): String {
+            if (participants.isEmpty()) return ""
+
+            if (distribution.type == DistributionType.AMAL) {
+                val allocatedSum = participants.sumOf { it.allocatedCount }
+                val sb = StringBuilder()
+                sb.append("${distribution.name}\n")
+                sb.append("Progress: $allocatedSum/${distribution.totalTarget} Recitations (${participants.size} Members)\n\n")
+                participants
+                    .sortedWith(
+                        compareBy<ParticipantEntity> { it.displayOrder }
+                            .thenBy { it.name.lowercase() }
+                    )
+                    .forEach { p ->
+                        sb.append("${p.allocatedCount}: ${p.name}\n")
+                    }
+                return sb.toString().trimEnd()
+            }
+
+            if (assignments.isEmpty()) return ""
+            val info = HijriDateUtils.getMonthInfo(targetYear, targetMonth)
+            val cycleNumber = ((targetYear - distribution.startYear) * 12 + (targetMonth - distribution.startMonth)) + 1
+            val totalAssignedParas = assignments.sumOf { it.allocatedCount }
+
+            val sortedByParasFirst = assignments.sortedWith(
+                compareBy<ParaAssignment> { it.startPara }
+                    .thenBy { it.endPara }
+                    .thenBy { it.participantName.lowercase() }
+            )
+
+            val sb = StringBuilder()
+            sb.append("${distribution.name}\n")
+            sb.append("${info.gregorianFullText} • ${info.hijriFullText}\n")
+            sb.append("Cycle Month $cycleNumber • Progress: $totalAssignedParas/30 Paras (${sortedByParasFirst.size} Members)\n\n")
+
+            sortedByParasFirst.forEach { assignment ->
+                sb.append("${assignment.commaSeparatedParas}: ${assignment.participantName}\n")
+            }
+
+            return sb.toString().trimEnd()
+        }
+    }
 }
-
-

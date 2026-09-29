@@ -23,6 +23,9 @@ interface DistributionDao {
     @Query("SELECT * FROM participants WHERE distributionId = :distributionId ORDER BY displayOrder ASC")
     fun getParticipantsForDistribution(distributionId: Long): Flow<List<ParticipantEntity>>
 
+    @Query("SELECT * FROM participants ORDER BY distributionId ASC, displayOrder ASC")
+    fun getAllParticipants(): Flow<List<ParticipantEntity>>
+
     @Query("SELECT * FROM participants WHERE distributionId = :distributionId ORDER BY displayOrder ASC")
     suspend fun getParticipantsForDistributionList(distributionId: Long): List<ParticipantEntity>
 

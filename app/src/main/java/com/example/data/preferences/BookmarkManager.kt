@@ -5,12 +5,17 @@ import android.content.SharedPreferences
 import com.example.data.quran.ArabicFontStyle
 import com.example.data.quran.LastReadBookmark
 import com.example.data.quran.ReadMode
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
 
 class BookmarkManager(context: Context) {
     private val prefs: SharedPreferences =
         context.getSharedPreferences("quran_baanto_prefs", Context.MODE_PRIVATE)
+    private val dataStore = UserPreferencesDataStore.getInstance(context)
+    private val scope = CoroutineScope(Dispatchers.IO)
 
     companion object {
         private const val KEY_ALL_BOOKMARKS = "all_bookmarks_json"
@@ -80,6 +85,9 @@ class BookmarkManager(context: Context) {
         // Insert new bookmark at the beginning (latest)
         currentList.add(0, bookmark)
         saveAllBookmarks(currentList)
+        scope.launch {
+            dataStore.addOrUpdateBookmark(bookmark)
+        }
     }
 
     @Synchronized
@@ -93,12 +101,18 @@ class BookmarkManager(context: Context) {
             }
         }
         saveAllBookmarks(currentList)
+        scope.launch {
+            dataStore.removeBookmark(mode, id, surahNumber, ayahNumber)
+        }
     }
 
     @Synchronized
     fun clearAllBookmarks() {
         prefs.edit().remove(KEY_ALL_BOOKMARKS).apply()
         clearLegacyLastRead()
+        scope.launch {
+            dataStore.clearAllBookmarks()
+        }
     }
 
     private fun saveAllBookmarks(list: List<LastReadBookmark>) {
@@ -181,6 +195,9 @@ class BookmarkManager(context: Context) {
 
     fun saveFontStyle(style: ArabicFontStyle) {
         prefs.edit().putString("arabic_font_style", style.name).apply()
+        scope.launch {
+            dataStore.setArabicFontStyle(style)
+        }
     }
 
     fun getFontStyle(): ArabicFontStyle {
@@ -194,6 +211,9 @@ class BookmarkManager(context: Context) {
 
     fun saveKeepScreenOn(enabled: Boolean) {
         prefs.edit().putBoolean("keep_screen_on", enabled).apply()
+        scope.launch {
+            dataStore.setKeepScreenOn(enabled)
+        }
     }
 
     fun getKeepScreenOn(): Boolean {

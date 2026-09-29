@@ -13,6 +13,11 @@ data class ParticipantAllocation(
 
 /**
  * Represents the computed Para assignment for a specific participant in a given month.
+ *
+ * Guarantees:
+ * - [startPara] and [endPara] are strictly within 1..30.
+ * - [startPara] <= [endPara] (contiguous block, never crosses the 30 -> 1 boundary).
+ * - [assignedParas] contains no duplicates and has size == [allocatedCount].
  */
 data class ParaAssignment(
     val participantId: Long,
@@ -21,8 +26,20 @@ data class ParaAssignment(
     val startPara: Int, // 1..30
     val endPara: Int    // 1..30
 ) {
+    init {
+        require(startPara in 1..RotationEngine.TOTAL_QURAN_PARAS) {
+            "startPara must be between 1 and 30, got $startPara"
+        }
+        require(endPara in 1..RotationEngine.TOTAL_QURAN_PARAS) {
+            "endPara must be between 1 and 30, got $endPara"
+        }
+        require(startPara <= endPara) {
+            "Allocation must be contiguous and never cross 30->1 boundary (start=$startPara, end=$endPara)"
+        }
+    }
+
     /**
-     * Complete list of assigned Para numbers (1..30) in consecutive reading order.
+     * Complete list of assigned Para numbers (1..30) in contiguous reading order.
      */
     val assignedParas: List<Int>
         get() = (startPara..endPara).toList()
@@ -39,67 +56,120 @@ data class ParaAssignment(
         }
 
     /**
-     * Comma-separated paras string e.g. "1, 2" or "11" or "14, 15, 16".
+     * Compact pill label e.g. "Paras 1–6" or "Para 12".
+     */
+    val compactRangeLabel: String
+        get() = when {
+            allocatedCount == 1 || startPara == endPara -> "Para $startPara"
+            else -> "Paras $startPara–$endPara"
+        }
+
+    /**
+     * Comma-separated paras string e.g. "1, 2" or "11" or "3, 4, 5".
      */
     val commaSeparatedParas: String
         get() = assignedParas.joinToString(", ")
+
+    /**
+     * Para-first formatted line e.g. "1, 2: XYZ" or "3, 4, 5: ABC".
+     */
+    val paraFirstSummaryLine: String
+        get() = "$commaSeparatedParas: $participantName"
 }
 
 /**
- * Deterministic and fair Qur'an Para rotation engine.
+ * Deterministic 30-Para Contiguous Block Khatm Rotation Engine.
  *
- * Guarantees:
- * 1. Sequential Progression: Prioritizes assigning the consecutive following Paras in the next month
- *    (e.g., Paras 1–3 in Month 1 -> Paras 4–6 in Month 2 -> Paras 7–9 in Month 3).
- * 2. Zero Repetitions: Strictly prevents any participant from receiving the same Paras in consecutive months.
- * 3. Minimal Forward Shift: When unequal allocations or restrictions prevent exact sequential continuation,
- *    advances by the smallest valid forward step, skipping the minimum number of Paras.
- * 4. Deterministic & Full Partition: Exactly 30 Paras (1..30) are partitioned with 0 duplicates and 0 omissions.
+ * Rules enforced:
+ * 1. Treats the Quran as 30 ordered blocks (1..30), never 30 independent random values.
+ * 2. Treats each month as one complete 30-Para cycle.
+ * 3. Allocates each member a contiguous block of Paras (startPara..endPara).
+ * 4. Rotates the starting position between months so members progress sequentially through the Quran.
+ * 5. A member's allocation NEVER crosses the 30 -> 1 boundary. The 30 -> 1 transition only occurs
+ *    when starting the next month's cycle.
+ * 6. Every assigned Para is between 1 and 30.
+ * 7. No member has duplicate Paras within their allocation.
+ * 8. Every Para 1..30 is accounted for exactly once in full-group coverage.
+ * 9. Larger allocations rotate fairly when 30 isn't evenly divisible by member count.
+ * 10. Month N+1 never duplicates Month N (when member count > 1).
+ * 11. Members progress through the Para sequence rather than jumping randomly.
+ * 12. After Para 30, progression continues at Para 1 in the next cycle, never inside an allocation.
+ * 13. All returned monthly assignments are ordered strictly from Para 1 to Para 30, then by name.
  */
 object RotationEngine {
 
     const val TOTAL_QURAN_PARAS = 30
 
+    private val paraFirstComparator: Comparator<ParaAssignment> =
+        compareBy<ParaAssignment> { it.startPara }
+            .thenBy { it.endPara }
+            .thenBy { it.participantName.lowercase() }
+
     /**
-     * Validates whether a list of participant allocations totals exactly 30 Paras.
+     * Validates whether a list of participant allocations totals exactly 30 Paras
+     * with valid positive contiguous sizes.
      */
     fun isValid30Allocation(participants: List<ParticipantAllocation>): Boolean {
-        if (participants.isEmpty()) return false
+        if (participants.isEmpty() || participants.size > TOTAL_QURAN_PARAS) return false
         val total = participants.sumOf { it.count }
-        val allPositive = participants.all { it.count > 0 && it.name.isNotBlank() }
+        val allPositive = participants.all { it.count in 1..TOTAL_QURAN_PARAS && it.name.isNotBlank() }
         return total == TOTAL_QURAN_PARAS && allPositive
     }
 
     /**
-     * Determines the optimal monthly rotation step for a given set of participant allocations.
-     *
-     * Rules:
-     * 1. Equal Allocations (e.g. 10x3, 6x5, 5x6, 15x2, 30x1): Step equals the allocation size (e.g. 3),
-     *    producing exact sequential progression (1–3 -> 4–6 -> 7–9 -> ...).
-     * 2. Unequal Allocations: Finds the smallest forward step S in 1..29 that eliminates (or minimizes)
-     *    consecutive month repetition across all members, skipping the minimum number of Paras forward.
+     * Computes balanced contiguous block sizes for [memberCount] participants summing to 30.
+     * When 30 is not divisible by [memberCount], the first (30 % memberCount) slots receive
+     * (base + 1) Paras and the remaining slots receive (base) Paras.
+     */
+    fun computeFairSlotSizes(memberCount: Int): List<Int> {
+        if (memberCount <= 0) return emptyList()
+        val clampedCount = memberCount.coerceAtMost(TOTAL_QURAN_PARAS)
+        val base = TOTAL_QURAN_PARAS / clampedCount
+        val remainder = TOTAL_QURAN_PARAS % clampedCount
+        return List(clampedCount) { index ->
+            base + if (index < remainder) 1 else 0
+        }
+    }
+
+    /**
+     * Computes the Month 1 (Cycle 0) contiguous Para range for each participant in their current order,
+     * clamping within 1..30 so the UI can preview contiguous ranges while editing.
+     */
+    fun previewInitialRanges(participants: List<ParticipantAllocation>): List<IntRange?> {
+        var currentPara = 1
+        return participants.map { p ->
+            if (p.count <= 0 || currentPara > TOTAL_QURAN_PARAS) {
+                null
+            } else {
+                val start = currentPara
+                val end = (currentPara + p.count - 1).coerceAtMost(TOTAL_QURAN_PARAS)
+                currentPara = end + 1
+                start..end
+            }
+        }
+    }
+
+    /**
+     * Determines the optimal forward rotation step for custom weighted participant allocations.
      */
     fun calculateOptimalRotationStep(participants: List<ParticipantAllocation>): Int {
         if (participants.size <= 1) return 1
         val sorted = participants.sortedBy { it.displayOrder }
         val n = sorted.size
 
-        // If all participants have equal shares, step is 1 participant position
-        val distinctCounts = sorted.map { it.count }.distinct()
-        if (distinctCounts.size == 1) {
+        val minCount = sorted.minOf { it.count }
+        val maxCount = sorted.maxOf { it.count }
+        if (maxCount - minCount <= 1) {
             return 1
         }
 
         var bestStep = 1
         var lowestOverlapPenalty = Int.MAX_VALUE
 
-        // Find the smallest step k in 1 until n that minimizes consecutive-month overlap across all cycles
         for (candidateStep in 1 until n) {
             var overlapPenalty = 0
 
-            // Check across all possible month transitions (m = 0 until n)
             for (m in 0 until n) {
-                // Month m assignments
                 val startIdxM = (((-m * candidateStep) % n) + n) % n
                 val rotatedM = (0 until n).map { i -> sorted[(startIdxM + i) % n] }
                 val mMappings = mutableMapOf<Long, Set<Int>>()
@@ -110,7 +180,6 @@ object RotationEngine {
                     curM = end + 1
                 }
 
-                // Month m + 1 assignments
                 val startIdxNext = (((-(m + 1) * candidateStep) % n) + n) % n
                 val rotatedNext = (0 until n).map { i -> sorted[(startIdxNext + i) % n] }
                 var curNext = 1
@@ -136,14 +205,8 @@ object RotationEngine {
     }
 
     /**
-     * Calculates deterministic Para assignments for any target month and year.
-     *
-     * @param participants List of participants. Sum of counts must equal 30.
-     * @param startYear Year distribution was created
-     * @param startMonth Month distribution was created (1..12)
-     * @param targetYear Target calculation year
-     * @param targetMonth Target calculation month (1..12)
-     * @param customShiftStep Optional custom shift step; if null, optimal step is calculated.
+     * Calculates deterministic, contiguous 30-Para assignments for any target month and year,
+     * always ordered from Para 1 to Para 30, then by participant name.
      */
     fun calculateAssignments(
         participants: List<ParticipantAllocation>,
@@ -157,12 +220,40 @@ object RotationEngine {
 
         val sortedParticipants = participants.sortedBy { it.displayOrder }
         val n = sortedParticipants.size
-        val shiftStep = customShiftStep ?: calculateOptimalRotationStep(sortedParticipants)
-
-        // Month offset m (0 for creation month)
         val monthOffset = (targetYear - startYear) * 12 + (targetMonth - startMonth)
 
-        // Rotate participant positions along the partition of 30 Paras
+        val minCount = sortedParticipants.minOf { it.count }
+        val maxCount = sortedParticipants.maxOf { it.count }
+        val totalParas = sortedParticipants.sumOf { it.count }
+
+        // Balanced / Fair-Remainder Mode (e.g. equal shares or 30 divided across N members where max - min <= 1)
+        if (totalParas == TOTAL_QURAN_PARAS && maxCount - minCount <= 1 && customShiftStep == null) {
+            val slotBlocks = ArrayList<IntRange>(n)
+            var cur = 1
+            for (i in 0 until n) {
+                val slotSize = sortedParticipants[i].count
+                val end = (cur + slotSize - 1).coerceAtMost(TOTAL_QURAN_PARAS)
+                slotBlocks.add(cur..end)
+                cur = end + 1
+            }
+
+            // In month m, member i progresses to slot (i + m) mod N, then sort strictly 1 -> 30
+            return sortedParticipants.mapIndexed { memberIdx, participant ->
+                val slotIdx = (((memberIdx + monthOffset) % n) + n) % n
+                val range = slotBlocks[slotIdx]
+                val blockCount = range.last - range.first + 1
+                ParaAssignment(
+                    participantId = participant.id,
+                    participantName = participant.name,
+                    allocatedCount = blockCount,
+                    startPara = range.first,
+                    endPara = range.last
+                )
+            }.sortedWith(paraFirstComparator)
+        }
+
+        // Custom Weighted Mode: each participant retains their specific custom count
+        val shiftStep = customShiftStep ?: calculateOptimalRotationStep(sortedParticipants)
         val startIndex = (((-monthOffset * shiftStep) % n) + n) % n
         val rotatedParticipants = (0 until n).map { i ->
             sortedParticipants[(startIndex + i) % n]
@@ -173,7 +264,7 @@ object RotationEngine {
 
         for (participant in rotatedParticipants) {
             val count = participant.count
-            if (count <= 0) continue
+            if (count <= 0 || currentPara > TOTAL_QURAN_PARAS) continue
 
             val actualStart = currentPara
             val actualEnd = (currentPara + count - 1).coerceAtMost(TOTAL_QURAN_PARAS)
@@ -182,7 +273,7 @@ object RotationEngine {
                 ParaAssignment(
                     participantId = participant.id,
                     participantName = participant.name,
-                    allocatedCount = count,
+                    allocatedCount = actualEnd - actualStart + 1,
                     startPara = actualStart,
                     endPara = actualEnd
                 )
@@ -191,9 +282,6 @@ object RotationEngine {
             currentPara = actualEnd + 1
         }
 
-        // Return assignments in participant display order
-        val idOrderMap = sortedParticipants.mapIndexed { idx, p -> p.id to idx }.toMap()
-        return assignments.sortedBy { idOrderMap[it.participantId] ?: 0 }
+        return assignments.sortedWith(paraFirstComparator)
     }
 }
-

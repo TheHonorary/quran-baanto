@@ -65,12 +65,55 @@ class ExampleUnitTest {
             val distinctParas = allAssignedParas.toSet()
             assertEquals("Month $monthOffset must cover all 30 unique Paras", (1..30).toSet(), distinctParas)
 
+            // Assignments list must be strictly ordered 1 to 30
+            assertEquals(1, assignments.first().startPara)
+            assertEquals(30, assignments.last().endPara)
+            for (i in 1 until assignments.size) {
+                assertEquals(assignments[i - 1].endPara + 1, assignments[i].startPara)
+            }
+
             // Individual counts must match requested allocation sizes
-            assertEquals(5, assignments[0].allocatedCount)
-            assertEquals(7, assignments[1].allocatedCount)
-            assertEquals(8, assignments[2].allocatedCount)
-            assertEquals(10, assignments[3].allocatedCount)
+            assertEquals(5, assignments.first { it.participantId == 1L }.allocatedCount)
+            assertEquals(7, assignments.first { it.participantId == 2L }.allocatedCount)
+            assertEquals(8, assignments.first { it.participantId == 3L }.allocatedCount)
+            assertEquals(10, assignments.first { it.participantId == 4L }.allocatedCount)
         }
+    }
+
+    @Test
+    fun testShareSummaryParaFirstOrderingAndFormat() {
+        val dist = com.example.data.db.DistributionEntity(
+            id = 1L,
+            name = "Family Khatm",
+            startYear = 2026,
+            startMonth = 1
+        )
+        val participants = listOf(
+            com.example.data.db.ParticipantEntity(id = 1, distributionId = 1, name = "ABC", allocatedCount = 15, displayOrder = 1),
+            com.example.data.db.ParticipantEntity(id = 2, distributionId = 1, name = "XYZ", allocatedCount = 15, displayOrder = 2)
+        )
+        val allocs = participants.map {
+            ParticipantAllocation(id = it.id, name = it.name, count = it.allocatedCount, displayOrder = it.displayOrder)
+        }
+        // In Month 2 (February 2026), XYZ has Paras 1..15 and ABC has Paras 16..30
+        val febAssignments = RotationEngine.calculateAssignments(allocs, 2026, 1, 2026, 2)
+        assertEquals("XYZ", febAssignments[0].participantName)
+        assertEquals(1, febAssignments[0].startPara)
+        assertEquals("ABC", febAssignments[1].participantName)
+        assertEquals(16, febAssignments[1].startPara)
+
+        val summary = com.example.ui.viewmodel.DistributionViewModel.formatDistributionShareSummary(
+            distribution = dist,
+            participants = participants,
+            assignments = febAssignments,
+            targetYear = 2026,
+            targetMonth = 2
+        )
+        val lines = summary.lines()
+        val firstParaLineIdx = lines.indexOfFirst { it.startsWith("1, 2") }
+        val secondParaLineIdx = lines.indexOfFirst { it.startsWith("16, 17") }
+        assertTrue("Must contain '1, 2, ...: XYZ' line", firstParaLineIdx >= 0 && lines[firstParaLineIdx].endsWith(": XYZ"))
+        assertTrue("Must contain '16, 17, ...: ABC' line", secondParaLineIdx > firstParaLineIdx && lines[secondParaLineIdx].endsWith(": ABC"))
     }
 
     @Test
@@ -262,6 +305,78 @@ class ExampleUnitTest {
                 )
             }
         }
+    }
+
+    @Test
+    fun testNonDivisibleMemberCountFairRemainderRotationAndSequentialProgression() {
+        // Test 4 members (8, 8, 7, 7) and 7 members (5, 5, 4, 4, 4, 4, 4)
+        for (memberCount in listOf(4, 7, 8, 9, 11)) {
+            val slotSizes = RotationEngine.computeFairSlotSizes(memberCount)
+            assertEquals(30, slotSizes.sum())
+            val participants = slotSizes.mapIndexed { idx, count ->
+                ParticipantAllocation(
+                    id = (idx + 1).toLong(),
+                    name = "Member ${idx + 1}",
+                    count = count,
+                    displayOrder = idx + 1
+                )
+            }
+
+            // Over a full N-month cycle:
+            // 1. Every month covers 1..30 exactly once.
+            // 2. Every member's allocation is contiguous (startPara..endPara) and never crosses 30->1.
+            // 3. Each member's next month starts immediately at (previous endPara + 1), wrapping 30 -> 1 only between months.
+            // 4. Over N months, every member reads all 30 Paras and receives the larger blocks the exact same number of times.
+            val totalParasPerMemberAcrossCycle = mutableMapOf<Long, MutableList<Int>>()
+
+            for (m in 0 until memberCount) {
+                val cur = RotationEngine.calculateAssignments(participants, 2026, 1, 2026, 1 + m)
+                val next = RotationEngine.calculateAssignments(participants, 2026, 1, 2026, 1 + m + 1)
+
+                // Full 1..30 coverage with zero duplicates
+                val allParas = cur.flatMap { it.assignedParas }
+                assertEquals(30, allParas.size)
+                assertEquals((1..30).toSet(), allParas.toSet())
+
+                for (p in participants) {
+                    val curAssign = cur.first { it.participantId == p.id }
+                    val nextAssign = next.first { it.participantId == p.id }
+
+                    // Contiguous and within 1..30, never 30->1 inside an allocation
+                    assertTrue(curAssign.startPara in 1..30)
+                    assertTrue(curAssign.endPara in 1..30)
+                    assertTrue(curAssign.startPara <= curAssign.endPara)
+
+                    // Month N+1 progresses directly from Month N's endPara (or wraps 30 -> 1 at cycle start)
+                    val expectedNextStart = if (curAssign.endPara == 30) 1 else curAssign.endPara + 1
+                    assertEquals(
+                        "Member ${p.name} must progress sequentially without jumping",
+                        expectedNextStart,
+                        nextAssign.startPara
+                    )
+
+                    totalParasPerMemberAcrossCycle.getOrPut(p.id) { mutableListOf() }.addAll(curAssign.assignedParas)
+                }
+            }
+
+            // Over N months, every member has read Paras 1..30 in exact order (total 30 Paras each)
+            for (p in participants) {
+                val cycleParas = totalParasPerMemberAcrossCycle[p.id]!!
+                assertEquals(30, cycleParas.size)
+                assertEquals((1..30).toSet(), cycleParas.toSet())
+            }
+        }
+    }
+
+    @Test
+    fun testParseAyahExtractsTrueAyahNumberAndStripsTrailingMarker() {
+        val para3FirstVerse = "تِلۡكَ ٱلرُّسُلُ فَضَّلۡنَا بَعۡضَهُمۡ عَلَىٰ بَعۡضٖۘ وَٱللَّهُ يَفۡعَلُ مَا يُرِيدُ ۝253"
+        val parsed = com.example.ui.components.parseAyah(para3FirstVerse, fallbackNumber = 1)
+
+        assertEquals(253, parsed.ayahNumber)
+        assertEquals("٢٥٣", parsed.arabicDigits)
+        assertFalse("Arabic text must not retain raw ۝253 marker", parsed.arabicText.contains("۝"))
+        assertFalse("Arabic text must not retain raw ASCII 253", parsed.arabicText.contains("253"))
     }
 }
 

@@ -3,24 +3,30 @@ package com.example.ui
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarDefaults
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -45,13 +51,13 @@ import com.example.ui.viewmodel.QuranViewModel
 
 @Composable
 fun MainScreen() {
-    var isDarkTheme by remember { mutableStateOf(false) }
+    val quranViewModel: QuranViewModel = viewModel()
+    val distributionViewModel: DistributionViewModel = viewModel()
+    val isDarkTheme by quranViewModel.isDarkTheme.collectAsState()
     var showSettingsSheet by remember { mutableStateOf(false) }
 
     QuranBaantoTheme(darkTheme = isDarkTheme) {
         val navController = rememberNavController()
-        val distributionViewModel: DistributionViewModel = viewModel()
-        val quranViewModel: QuranViewModel = viewModel()
 
         val navBackStackEntry by navController.currentBackStackEntryAsState()
         val currentRoute = navBackStackEntry?.destination?.route
@@ -69,13 +75,13 @@ fun MainScreen() {
             bottomBar = {
                 AnimatedVisibility(
                     visible = shouldShowBottomBar,
-                    enter = fadeIn(),
-                    exit = fadeOut()
+                    enter = fadeIn() + slideInVertically { it },
+                    exit = fadeOut() + slideOutVertically { it }
                 ) {
                     NavigationBar(
                         containerColor = MaterialTheme.colorScheme.surface,
-                        tonalElevation = 6.dp,
-                        modifier = Modifier.windowInsetsPadding(WindowInsets.navigationBars)
+                        tonalElevation = 4.dp,
+                        windowInsets = NavigationBarDefaults.windowInsets
                     ) {
                         bottomNavItems.forEach { item ->
                             val isSelected = currentRoute == item.route
@@ -112,19 +118,26 @@ fun MainScreen() {
                                     indicatorColor = MaterialTheme.colorScheme.primaryContainer,
                                     unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
                                     unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+                                ),
+                                modifier = Modifier.semantics {
+                                    role = Role.Tab
+                                    contentDescription = "${item.title} tab"
+                                }
                             )
                         }
                     }
                 }
             },
+            contentWindowInsets = WindowInsets(0, 0, 0, 0),
             containerColor = MaterialTheme.colorScheme.background,
             modifier = Modifier.fillMaxSize()
         ) { innerPadding ->
             NavHost(
                 navController = navController,
                 startDestination = BottomNavItem.Home.route,
-                modifier = Modifier.padding(innerPadding)
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(bottom = innerPadding.calculateBottomPadding())
             ) {
                 // Home Screen
                 composable(BottomNavItem.Home.route) {
@@ -145,15 +158,22 @@ fun MainScreen() {
                                 restoreState = true
                             }
                         },
+                        onCreateNewDistribution = { type ->
+                            navController.navigate("create_edit_distribution?type=${type.name}")
+                        },
                         onOpenDistributionDetail = { distId ->
                             navController.navigate("distribution_detail/$distId")
                         },
                         onOpenParaReader = { paraNum ->
-                            quranViewModel.selectPara(paraNum)
+                            if (quranViewModel.selectedParaNumber.value != paraNum || quranViewModel.targetScrollAyah.value == null) {
+                                quranViewModel.selectPara(paraNum)
+                            }
                             navController.navigate("quran_reader_para/$paraNum")
                         },
                         onOpenSurahReader = { surahNum ->
-                            quranViewModel.selectSurah(surahNum)
+                            if (quranViewModel.selectedSurahNumber.value != surahNum || quranViewModel.targetScrollAyah.value == null) {
+                                quranViewModel.selectSurah(surahNum)
+                            }
                             navController.navigate("quran_reader_surah/$surahNum")
                         },
                         onOpenSettings = { showSettingsSheet = true }
@@ -165,11 +185,15 @@ fun MainScreen() {
                     QuranListScreen(
                         quranViewModel = quranViewModel,
                         onOpenParaReader = { paraNum ->
-                            quranViewModel.selectPara(paraNum)
+                            if (quranViewModel.selectedParaNumber.value != paraNum || quranViewModel.targetScrollAyah.value == null) {
+                                quranViewModel.selectPara(paraNum)
+                            }
                             navController.navigate("quran_reader_para/$paraNum")
                         },
                         onOpenSurahReader = { surahNum ->
-                            quranViewModel.selectSurah(surahNum)
+                            if (quranViewModel.selectedSurahNumber.value != surahNum || quranViewModel.targetScrollAyah.value == null) {
+                                quranViewModel.selectSurah(surahNum)
+                            }
                             navController.navigate("quran_reader_surah/$surahNum")
                         }
                     )
@@ -272,8 +296,9 @@ fun MainScreen() {
             if (showSettingsSheet) {
                 SettingsSheet(
                     isDarkTheme = isDarkTheme,
-                    onToggleDarkTheme = { isDarkTheme = it },
-                    onDismiss = { showSettingsSheet = false }
+                    onToggleDarkTheme = { quranViewModel.setDarkTheme(it) },
+                    onDismiss = { showSettingsSheet = false },
+                    quranViewModel = quranViewModel
                 )
             }
         }
