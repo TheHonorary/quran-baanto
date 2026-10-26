@@ -27,101 +27,114 @@ jobs:
           java-version: '21'
           cache: gradle
 
-      - name: Accept Android SDK Licenses and Install SDK Packages
+      - name: Accept Android SDK Licenses
         run: |
-          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
-          SDKMANAGER=$(find "$SDK_ROOT/cmdline-tools" -name sdkmanager | head -n 1)
-          yes | "$SDKMANAGER" --licenses || true
-          "$SDKMANAGER" "platform-tools" "platforms;android-36" "build-tools;36.0.0" || true
+          mkdir -p "$ANDROID_HOME/licenses" || true
+          echo "24333f8a63b6825ea9c5514f83c2829b004d1fee" > "$ANDROID_HOME/licenses/android-sdk-license" || true
+          echo "84831b9409646a918e30573bab4c9c91346d8abd" > "$ANDROID_HOME/licenses/android-sdk-preview-license" || true
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses 2>/dev/null || true
 
       - name: Set up Environment Variables (.env)
+        env:
+          ENV_CONTENT: ${{ secrets.ENV_FILE_CONTENT }}
+          FB_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+          FB_PROJECT_NUMBER: ${{ secrets.FIREBASE_PROJECT_NUMBER }}
+          FB_APP_ID: ${{ secrets.FIREBASE_APP_ID }}
+          FB_STORAGE_BUCKET: ${{ secrets.FIREBASE_STORAGE_BUCKET }}
+          FB_API_KEY: ${{ secrets.FIREBASE_API_KEY }}
+          ADMOB_APP: ${{ secrets.ADMOB_APP_ID }}
+          ADMOB_REWARDED: ${{ secrets.ADMOB_REWARDED_AD_UNIT_ID }}
         run: |
-          if [ -n "${{ secrets.ENV_FILE_CONTENT }}" ]; then
-            echo "${{ secrets.ENV_FILE_CONTENT }}" > .env
+          if [ -n "$ENV_CONTENT" ]; then
+            echo "$ENV_CONTENT" > .env
           fi
 
-          # Override individual secrets from GitHub Secrets if defined
-          if [ -n "${{ secrets.FIREBASE_PROJECT_ID }}" ]; then
+          if [ -n "$FB_PROJECT_ID" ]; then
             sed -i '/FIREBASE_PROJECT_ID=/d' .env
-            echo "FIREBASE_PROJECT_ID=${{ secrets.FIREBASE_PROJECT_ID }}" >> .env
+            echo "FIREBASE_PROJECT_ID=$FB_PROJECT_ID" >> .env
           fi
-          if [ -n "${{ secrets.FIREBASE_PROJECT_NUMBER }}" ]; then
+          if [ -n "$FB_PROJECT_NUMBER" ]; then
             sed -i '/FIREBASE_PROJECT_NUMBER=/d' .env
-            echo "FIREBASE_PROJECT_NUMBER=${{ secrets.FIREBASE_PROJECT_NUMBER }}" >> .env
+            echo "FIREBASE_PROJECT_NUMBER=$FB_PROJECT_NUMBER" >> .env
           fi
-          if [ -n "${{ secrets.FIREBASE_APP_ID }}" ]; then
+          if [ -n "$FB_APP_ID" ]; then
             sed -i '/FIREBASE_APP_ID=/d' .env
-            echo "FIREBASE_APP_ID=${{ secrets.FIREBASE_APP_ID }}" >> .env
+            echo "FIREBASE_APP_ID=$FB_APP_ID" >> .env
           fi
-          if [ -n "${{ secrets.FIREBASE_STORAGE_BUCKET }}" ]; then
+          if [ -n "$FB_STORAGE_BUCKET" ]; then
             sed -i '/FIREBASE_STORAGE_BUCKET=/d' .env
-            echo "FIREBASE_STORAGE_BUCKET=${{ secrets.FIREBASE_STORAGE_BUCKET }}" >> .env
+            echo "FIREBASE_STORAGE_BUCKET=$FB_STORAGE_BUCKET" >> .env
           fi
-          if [ -n "${{ secrets.FIREBASE_API_KEY }}" ]; then
+          if [ -n "$FB_API_KEY" ]; then
             sed -i '/FIREBASE_API_KEY=/d' .env
-            echo "FIREBASE_API_KEY=${{ secrets.FIREBASE_API_KEY }}" >> .env
+            echo "FIREBASE_API_KEY=$FB_API_KEY" >> .env
           fi
-          if [ -n "${{ secrets.ADMOB_APP_ID }}" ]; then
+          if [ -n "$ADMOB_APP" ]; then
             sed -i '/ADMOB_APP_ID=/d' .env
-            echo "ADMOB_APP_ID=${{ secrets.ADMOB_APP_ID }}" >> .env
+            echo "ADMOB_APP_ID=$ADMOB_APP" >> .env
           fi
-          if [ -n "${{ secrets.ADMOB_REWARDED_AD_UNIT_ID }}" ]; then
+          if [ -n "$ADMOB_REWARDED" ]; then
             sed -i '/ADMOB_REWARDED_AD_UNIT_ID=/d' .env
-            echo "ADMOB_REWARDED_AD_UNIT_ID=${{ secrets.ADMOB_REWARDED_AD_UNIT_ID }}" >> .env
+            echo "ADMOB_REWARDED_AD_UNIT_ID=$ADMOB_REWARDED" >> .env
           fi
 
       - name: Set up Google Services JSON for Firebase
+        env:
+          GS_BASE64: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
         run: |
-          if [ -n "${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}" ]; then
-            echo "${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}" | base64 --decode > app/google-services.json
+          if [ -n "$GS_BASE64" ]; then
+            echo "$GS_BASE64" | base64 --decode > app/google-services.json
             echo "Successfully updated google-services.json from GitHub Secrets"
           fi
 
       - name: Set up Release Signing Key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          INPUT_STORE_PW: ${{ secrets.STORE_PASSWORD }}
+          INPUT_KEY_PW: ${{ secrets.KEY_PASSWORD }}
+          INPUT_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
         run: |
-          if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
-            echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > my-upload-key.jks
-            echo "STORE_PASSWORD=${{ secrets.STORE_PASSWORD }}" >> $GITHUB_ENV
-            echo "KEY_PASSWORD=${{ secrets.KEY_PASSWORD }}" >> $GITHUB_ENV
-            echo "KEY_ALIAS=${{ secrets.KEY_ALIAS || 'upload' }}" >> $GITHUB_ENV
-            echo "KEYSTORE_PATH=my-upload-key.jks" >> $GITHUB_ENV
-            echo "Using custom release keystore from GitHub Secrets"
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 --decode > "${GITHUB_WORKSPACE}/my-upload-key.jks"
+            echo "STORE_PASSWORD=${INPUT_STORE_PW:-android}" >> $GITHUB_ENV
+            echo "KEY_PASSWORD=${INPUT_KEY_PW:-android}" >> $GITHUB_ENV
+            echo "KEY_ALIAS=${INPUT_KEY_ALIAS:-upload}" >> $GITHUB_ENV
+            echo "KEYSTORE_PATH=${GITHUB_WORKSPACE}/my-upload-key.jks" >> $GITHUB_ENV
+            echo "Custom release keystore configured from GitHub Secrets"
           else
-            echo "Generating self-signed upload keystore for CI build verification..."
-            keytool -genkeypair -v -keystore my-upload-key.jks -alias upload \
+            echo "Generating self-signed upload keystore..."
+            rm -f "${GITHUB_WORKSPACE}/my-upload-key.jks"
+            keytool -genkeypair -v -keystore "${GITHUB_WORKSPACE}/my-upload-key.jks" -alias upload \
               -keyalg RSA -keysize 2048 -validity 10000 \
               -storepass android -keypass android \
               -dname "CN=Quran Baanto, OU=Mobile, O=Quran Baanto, L=Global, ST=Online, C=US"
             echo "STORE_PASSWORD=android" >> $GITHUB_ENV
             echo "KEY_PASSWORD=android" >> $GITHUB_ENV
             echo "KEY_ALIAS=upload" >> $GITHUB_ENV
-            echo "KEYSTORE_PATH=my-upload-key.jks" >> $GITHUB_ENV
+            echo "KEYSTORE_PATH=${GITHUB_WORKSPACE}/my-upload-key.jks" >> $GITHUB_ENV
             echo "Self-signed CI keystore generated successfully"
           fi
 
       - name: Make Gradle wrapper executable
         run: chmod +x ./gradlew
 
-      - name: Build Release Bundle (AAB for Google Play Store)
-        run: ./gradlew bundleRelease --no-daemon --stacktrace
-
-      - name: Build Release APK (Sideload / Direct Testing)
-        run: ./gradlew assembleRelease --no-daemon --stacktrace
+      - name: Build Release Bundle and APK
+        run: ./gradlew bundleRelease assembleRelease --no-daemon --stacktrace
 
       - name: Upload Play Store AAB Bundle
         uses: actions/upload-artifact@v4
         with:
           name: quran-baanto-release-aab
-          path: app/build/outputs/bundle/release/app-release.aab
-          if-no-files-found: error
+          path: app/build/outputs/bundle/release/*.aab
+          if-no-files-found: warn
           retention-days: 90
 
       - name: Upload Release APK
         uses: actions/upload-artifact@v4
         with:
           name: quran-baanto-release-apk
-          path: app/build/outputs/apk/release/app-release.apk
-          if-no-files-found: error
+          path: app/build/outputs/apk/release/*.apk
+          if-no-files-found: warn
           retention-days: 90
 
       - name: Create GitHub Release
@@ -129,8 +142,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            app/build/outputs/bundle/release/app-release.aab
-            app/build/outputs/apk/release/app-release.apk
+            app/build/outputs/bundle/release/*.aab
+            app/build/outputs/apk/release/*.apk
           draft: false
           prerelease: false
           generate_release_notes: true

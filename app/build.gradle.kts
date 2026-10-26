@@ -50,19 +50,21 @@ android {
 
   signingConfigs {
     create("release") {
-      val keystorePath = System.getenv("KEYSTORE_PATH") ?: "${rootDir}/my-upload-key.jks"
-      val keystoreFile = file(keystorePath)
-      if (keystoreFile.exists()) {
-        storeFile = keystoreFile
+      val envPath = System.getenv("KEYSTORE_PATH")
+      val candidateFile = when {
+        !envPath.isNullOrBlank() && file(envPath).isAbsolute -> file(envPath)
+        !envPath.isNullOrBlank() -> rootProject.file(envPath)
+        rootProject.file("my-upload-key.jks").exists() -> rootProject.file("my-upload-key.jks")
+        file("my-upload-key.jks").exists() -> file("my-upload-key.jks")
+        rootProject.file("debug.keystore").exists() -> rootProject.file("debug.keystore")
+        else -> null
+      }
+
+      if (candidateFile != null && candidateFile.exists()) {
+        storeFile = candidateFile
         storePassword = System.getenv("STORE_PASSWORD") ?: "android"
         keyAlias = System.getenv("KEY_ALIAS") ?: "upload"
         keyPassword = System.getenv("KEY_PASSWORD") ?: "android"
-      } else {
-        // Fallback to debug keystore for CI/test builds if upload key is not yet placed
-        storeFile = file("${rootDir}/debug.keystore")
-        storePassword = "android"
-        keyAlias = "androiddebugkey"
-        keyPassword = "android"
       }
     }
   }
@@ -72,7 +74,12 @@ android {
       isCrunchPngs = false
       isMinifyEnabled = false
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-      signingConfig = signingConfigs.getByName("release")
+      val releaseSigning = signingConfigs.findByName("release")
+      if (releaseSigning?.storeFile != null && releaseSigning.storeFile!!.exists()) {
+        signingConfig = releaseSigning
+      } else {
+        signingConfig = signingConfigs.getByName("debug")
+      }
     }
     debug { }
   }
