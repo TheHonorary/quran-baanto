@@ -85,4 +85,4 @@ We may update this Privacy Policy from time to time. Any changes will be publish
 ## 9. Contact Us
 If you have any questions, feedback, or requests regarding this Privacy Policy or your data, please reach out to:
 - **Developer:** Hambasy Studios
-- **Email:** support@hambasystudios.com (or via the project repository)
+- **Email:** hamzaabbashabib@gmail.com (or via the project repository)
