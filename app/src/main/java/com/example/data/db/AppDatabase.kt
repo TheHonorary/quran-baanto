@@ -10,7 +10,7 @@ import androidx.room.RoomDatabase
         DistributionEntity::class,
         ParticipantEntity::class
     ],
-    version = 3,
+    version = 6,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {

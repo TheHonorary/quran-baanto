@@ -33,7 +33,11 @@ data class UserSettings(
     val arabicFontStyle: ArabicFontStyle = ArabicFontStyle.UTHMANI,
     val fontSizeSp: Int = 24,
     val keepScreenOn: Boolean = true,
-    val readingTheme: ReadingTheme = ReadingTheme.DEFAULT
+    val readingTheme: ReadingTheme = ReadingTheme.DEFAULT,
+    val userProfileName: String = "",
+    val notificationsEnabled: Boolean = true,
+    val hasSeenNotificationPrompt: Boolean = false,
+    val lastMonthlyReminderStamp: String = ""
 )
 
 data class SessionState(
@@ -49,6 +53,10 @@ class UserPreferencesDataStore(private val context: Context) {
         val KEY_KEEP_SCREEN_ON = booleanPreferencesKey("keep_screen_on")
         val KEY_READING_THEME = stringPreferencesKey("reading_theme")
         val KEY_ALL_BOOKMARKS_JSON = stringPreferencesKey("all_bookmarks_json")
+        val KEY_USER_PROFILE_NAME = stringPreferencesKey("user_profile_name")
+        val KEY_NOTIFICATIONS_ENABLED = booleanPreferencesKey("notifications_enabled")
+        val KEY_HAS_SEEN_NOTIFICATION_PROMPT = booleanPreferencesKey("has_seen_notification_prompt")
+        val KEY_LAST_MONTHLY_REMINDER_STAMP = stringPreferencesKey("last_monthly_reminder_stamp")
 
         // Session state keys
         val KEY_SESSION_MODE = stringPreferencesKey("session_mode")
@@ -137,7 +145,11 @@ class UserPreferencesDataStore(private val context: Context) {
                 arabicFontStyle = fontStyle,
                 fontSizeSp = fontSize,
                 keepScreenOn = keepAwake,
-                readingTheme = rTheme
+                readingTheme = rTheme,
+                userProfileName = preferences[KEY_USER_PROFILE_NAME] ?: "",
+                notificationsEnabled = preferences[KEY_NOTIFICATIONS_ENABLED] ?: true,
+                hasSeenNotificationPrompt = preferences[KEY_HAS_SEEN_NOTIFICATION_PROMPT] ?: false,
+                lastMonthlyReminderStamp = preferences[KEY_LAST_MONTHLY_REMINDER_STAMP] ?: ""
             )
         }
 
@@ -210,6 +222,30 @@ class UserPreferencesDataStore(private val context: Context) {
     suspend fun setReadingTheme(theme: ReadingTheme) {
         context.dataStore.edit { preferences ->
             preferences[KEY_READING_THEME] = theme.name
+        }
+    }
+
+    suspend fun setUserProfileName(name: String) {
+        context.dataStore.edit { preferences ->
+            preferences[KEY_USER_PROFILE_NAME] = name.trim()
+        }
+    }
+
+    suspend fun setNotificationsEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[KEY_NOTIFICATIONS_ENABLED] = enabled
+        }
+    }
+
+    suspend fun setHasSeenNotificationPrompt(seen: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[KEY_HAS_SEEN_NOTIFICATION_PROMPT] = seen
+        }
+    }
+
+    suspend fun setLastMonthlyReminderStamp(stamp: String) {
+        context.dataStore.edit { preferences ->
+            preferences[KEY_LAST_MONTHLY_REMINDER_STAMP] = stamp
         }
     }
 

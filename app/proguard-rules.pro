@@ -1,21 +1,42 @@
-# Add project specific ProGuard rules here.
-# You can control the set of applied configuration files using the
-# proguardFiles setting in build.gradle.
-#
-# For more details, see
-#   http://developer.android.com/guide/developing/tools/proguard.html
+# ==============================================================================
+# Quran Baanto - ProGuard & R8 Optimization Rules
+# ==============================================================================
 
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
+# 1. Strip debug and verbose logs from release binaries to protect internal state
+-assumenosideeffects class android.util.Log {
+    public static boolean isLoggable(java.lang.String, int);
+    public static int v(...);
+    public static int d(...);
+    public static int i(...);
+    public static int w(...);
+}
 
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
+# 2. Local Database & Room Entities
+-keep class com.example.data.db.** { *; }
+-dontwarn androidx.room.paging.**
 
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
+# 3. Firebase & Firestore Data Transfer Objects (DTOs)
+-keep class com.example.data.firebase.** { *; }
+-keepattributes *Annotation*,Signature,InnerClasses,EnclosingMethod
+
+# 4. DataStore & Preferences Serialization
+-keepclassmembers class * extends androidx.datastore.preferences.protobuf.GeneratedMessageLite {
+    <fields>;
+    <methods>;
+}
+
+# 5. ZXing QR Code Generation
+-keep class com.google.zxing.** { *; }
+-dontwarn com.google.zxing.**
+
+# 6. Quran Models & JSON Assets
+-keep class com.example.data.quran.** { *; }
+
+# 7. AdMob & Google Play Services
+-keep class com.google.android.gms.ads.** { *; }
+-keep public class com.google.ads.** { *; }
+-dontwarn com.google.android.gms.ads.**
+
+# 8. Kotlin Coroutines & Flow
+-keepnames class kotlinx.coroutines.internal.MainDispatcherFactory {}
+-keepnames class kotlinx.coroutines.CoroutineExceptionHandler {}

@@ -86,9 +86,13 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.Placeholder
+import androidx.compose.ui.text.PlaceholderVerticalAlign
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.foundation.text.InlineTextContent
+import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -104,6 +108,7 @@ import com.example.data.quran.ParaDetail
 import com.example.data.quran.ReadMode
 import com.example.data.quran.RevelationType
 import com.example.data.quran.SurahDetail
+import com.example.ui.components.AyahEndMedallionSymbol
 import com.example.ui.components.ManuscriptOrnamentDivider
 import com.example.ui.components.OctagonalNumberMedallion
 import com.example.ui.components.PrimarySanctuaryButton
@@ -933,20 +938,31 @@ private fun AyahReaderItem(
     val lineHeightVal = if (fontStyle == ArabicFontStyle.INDO_PAK) (fontSizeSp * 2.05).sp else (fontSizeSp * 1.9).sp
     val letterSpacingVal = if (fontStyle == ArabicFontStyle.INDO_PAK) 0.4.sp else 0.sp
 
-    val annotatedText: AnnotatedString = remember(arabicText, arabicDigits, markerColor, fontSizeSp) {
+    val annotatedText: AnnotatedString = remember(arabicText, arabicDigits) {
         buildAnnotatedString {
             append(arabicText)
-            append("  ")
-            withStyle(
-                SpanStyle(
-                    color = markerColor,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = (fontSizeSp * 0.92f).sp
-                )
-            ) {
-                append("\u06DD$arabicDigits")
-            }
+            append(" ")
+            appendInlineContent(id = "ayah_end", alternateText = arabicDigits)
         }
+    }
+
+    val inlineContentMap = remember(markerColor, fontSizeSp) {
+        val markerSizeSp = (fontSizeSp * 1.34f).sp
+        mapOf(
+            "ayah_end" to InlineTextContent(
+                placeholder = Placeholder(
+                    width = markerSizeSp,
+                    height = markerSizeSp,
+                    placeholderVerticalAlign = PlaceholderVerticalAlign.Center
+                )
+            ) { digits ->
+                AyahEndMedallionSymbol(
+                    arabicDigits = digits,
+                    markerColor = markerColor,
+                    fontSizeSp = fontSizeSp
+                )
+            }
+        )
     }
 
     val highlightFill = markerColor.copy(alpha = 0.11f)
@@ -1020,6 +1036,7 @@ private fun AyahReaderItem(
         // Right Quranic Verse Text Column
         Text(
             text = annotatedText,
+            inlineContent = inlineContentMap,
             style = TextStyle(
                 fontSize = fontSizeSp.sp,
                 lineHeight = lineHeightVal,

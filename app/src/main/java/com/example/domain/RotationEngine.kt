@@ -16,7 +16,7 @@ data class ParticipantAllocation(
  *
  * Guarantees:
  * - [startPara] and [endPara] are strictly within 1..30.
- * - [startPara] <= [endPara] (contiguous block, never crosses the 30 -> 1 boundary).
+ * - Supports circular wrapping across 30 -> 1 (e.g. 30, 1 or 29, 30, 1).
  * - [assignedParas] contains no duplicates and has size == [allocatedCount].
  */
 data class ParaAssignment(
@@ -33,16 +33,20 @@ data class ParaAssignment(
         require(endPara in 1..RotationEngine.TOTAL_QURAN_PARAS) {
             "endPara must be between 1 and 30, got $endPara"
         }
-        require(startPara <= endPara) {
-            "Allocation must be contiguous and never cross 30->1 boundary (start=$startPara, end=$endPara)"
-        }
     }
 
     /**
-     * Complete list of assigned Para numbers (1..30) in contiguous reading order.
+     * Complete list of assigned Para numbers (1..30) in contiguous circular reading order.
+     * When startPara > endPara, wraps across 30 -> 1 (e.g. 30, 1 or 29, 30, 1).
      */
     val assignedParas: List<Int>
-        get() = (startPara..endPara).toList()
+        get() {
+            return if (startPara <= endPara) {
+                (startPara..endPara).toList()
+            } else {
+                (startPara..RotationEngine.TOTAL_QURAN_PARAS).toList() + (1..endPara).toList()
+            }
+        }
 
     /**
      * Clean, human-readable display string for the assigned Paras.
@@ -56,25 +60,41 @@ data class ParaAssignment(
         }
 
     /**
-     * Compact pill label e.g. "Paras 1–6" or "Para 12".
+     * Compact pill label e.g. "Paras 1–6" or "Para 12" or "Paras 30–1".
      */
     val compactRangeLabel: String
-        get() = when {
-            allocatedCount == 1 || startPara == endPara -> "Para $startPara"
-            else -> "Paras $startPara–$endPara"
-        }
+        get() = displayRangeText
 
     /**
-     * Comma-separated paras string e.g. "1, 2" or "11" or "3, 4, 5".
+     * Comma-separated paras string e.g. "1, 2" or "11" or "3, 4, 5" or "30, 1".
      */
     val commaSeparatedParas: String
         get() = assignedParas.joinToString(", ")
 
     /**
-     * Para-first formatted line e.g. "1, 2: XYZ" or "3, 4, 5: ABC".
+     * Name-first formatted line ordered by ascending Para e.g. "Abbas:        1, 2".
+     */
+    val nameFirstSummaryLine: String
+        get() = formatAlignedLine(targetNameColumnWidth = 14)
+
+    /**
+     * Formats "Name:        1, 2" with clean column alignment for WhatsApp / messaging apps.
+     */
+    fun formatAlignedLine(
+        targetNameColumnWidth: Int = 14,
+        extraSuffix: String = ""
+    ): String {
+        val cleanName = participantName.trim()
+        val label = if (cleanName.endsWith(":") || cleanName.endsWith(".")) cleanName else "$cleanName:"
+        val paddedName = label.padEnd((targetNameColumnWidth).coerceAtLeast(label.length + 2), ' ')
+        return "$paddedName$commaSeparatedParas$extraSuffix"
+    }
+
+    /**
+     * Legacy alias kept for compatibility, now returning Name-first format.
      */
     val paraFirstSummaryLine: String
-        get() = "$commaSeparatedParas: $participantName"
+        get() = "$participantName: $commaSeparatedParas"
 }
 
 /**
@@ -100,9 +120,11 @@ object RotationEngine {
 
     const val TOTAL_QURAN_PARAS = 30
 
-    private val paraFirstComparator: Comparator<ParaAssignment> =
-        compareBy<ParaAssignment> { it.startPara }
-            .thenBy { it.endPara }
+    private fun posMod(value: Int, mod: Int): Int = ((value % mod) + mod) % mod
+
+    val paraFirstComparator: Comparator<ParaAssignment> =
+        compareBy<ParaAssignment> { it.assignedParas.minOrNull() ?: it.startPara }
+            .thenBy { it.assignedParas.firstOrNull() ?: it.startPara }
             .thenBy { it.participantName.lowercase() }
 
     /**
@@ -150,18 +172,13 @@ object RotationEngine {
     }
 
     /**
-     * Determines the optimal forward rotation step for custom weighted participant allocations.
+     * Determines the optimal forward rotation step for custom weighted participant allocations
+     * in the circular 30-Para queue.
      */
     fun calculateOptimalRotationStep(participants: List<ParticipantAllocation>): Int {
         if (participants.size <= 1) return 1
         val sorted = participants.sortedBy { it.displayOrder }
         val n = sorted.size
-
-        val minCount = sorted.minOf { it.count }
-        val maxCount = sorted.maxOf { it.count }
-        if (maxCount - minCount <= 1) {
-            return 1
-        }
 
         var bestStep = 1
         var lowestOverlapPenalty = Int.MAX_VALUE
@@ -170,25 +187,24 @@ object RotationEngine {
             var overlapPenalty = 0
 
             for (m in 0 until n) {
-                val startIdxM = (((-m * candidateStep) % n) + n) % n
+                val startIdxM = posMod(-m * candidateStep, n)
                 val rotatedM = (0 until n).map { i -> sorted[(startIdxM + i) % n] }
                 val mMappings = mutableMapOf<Long, Set<Int>>()
                 var curM = 1
                 for (p in rotatedM) {
-                    val end = (curM + p.count - 1).coerceAtMost(TOTAL_QURAN_PARAS)
-                    mMappings[p.id] = (curM..end).toSet()
-                    curM = end + 1
+                    val pSet = (0 until p.count).map { posMod(curM - 1 + it, TOTAL_QURAN_PARAS) + 1 }.toSet()
+                    mMappings[p.id] = pSet
+                    curM = posMod(curM - 1 + p.count, TOTAL_QURAN_PARAS) + 1
                 }
 
-                val startIdxNext = (((-(m + 1) * candidateStep) % n) + n) % n
+                val startIdxNext = posMod(-(m + 1) * candidateStep, n)
                 val rotatedNext = (0 until n).map { i -> sorted[(startIdxNext + i) % n] }
                 var curNext = 1
                 for (p in rotatedNext) {
-                    val end = (curNext + p.count - 1).coerceAtMost(TOTAL_QURAN_PARAS)
-                    val nextSet = (curNext..end).toSet()
+                    val nextSet = (0 until p.count).map { posMod(curNext - 1 + it, TOTAL_QURAN_PARAS) + 1 }.toSet()
                     val mSet = mMappings[p.id] ?: emptySet()
                     overlapPenalty += mSet.intersect(nextSet).size
-                    curNext = end + 1
+                    curNext = posMod(curNext - 1 + p.count, TOTAL_QURAN_PARAS) + 1
                 }
             }
 
@@ -205,8 +221,8 @@ object RotationEngine {
     }
 
     /**
-     * Calculates deterministic, contiguous 30-Para assignments for any target month and year,
-     * always ordered from Para 1 to Para 30, then by participant name.
+     * Calculates deterministic, circular-queue 30-Para assignments for any target month and year,
+     * always ordered in ascending order of lowest Para number (Paras 1 -> 30).
      */
     fun calculateAssignments(
         participants: List<ParticipantAllocation>,
@@ -222,39 +238,8 @@ object RotationEngine {
         val n = sortedParticipants.size
         val monthOffset = (targetYear - startYear) * 12 + (targetMonth - startMonth)
 
-        val minCount = sortedParticipants.minOf { it.count }
-        val maxCount = sortedParticipants.maxOf { it.count }
-        val totalParas = sortedParticipants.sumOf { it.count }
-
-        // Balanced / Fair-Remainder Mode (e.g. equal shares or 30 divided across N members where max - min <= 1)
-        if (totalParas == TOTAL_QURAN_PARAS && maxCount - minCount <= 1 && customShiftStep == null) {
-            val slotBlocks = ArrayList<IntRange>(n)
-            var cur = 1
-            for (i in 0 until n) {
-                val slotSize = sortedParticipants[i].count
-                val end = (cur + slotSize - 1).coerceAtMost(TOTAL_QURAN_PARAS)
-                slotBlocks.add(cur..end)
-                cur = end + 1
-            }
-
-            // In month m, member i progresses to slot (i + m) mod N, then sort strictly 1 -> 30
-            return sortedParticipants.mapIndexed { memberIdx, participant ->
-                val slotIdx = (((memberIdx + monthOffset) % n) + n) % n
-                val range = slotBlocks[slotIdx]
-                val blockCount = range.last - range.first + 1
-                ParaAssignment(
-                    participantId = participant.id,
-                    participantName = participant.name,
-                    allocatedCount = blockCount,
-                    startPara = range.first,
-                    endPara = range.last
-                )
-            }.sortedWith(paraFirstComparator)
-        }
-
-        // Custom Weighted Mode: each participant retains their specific custom count
         val shiftStep = customShiftStep ?: calculateOptimalRotationStep(sortedParticipants)
-        val startIndex = (((-monthOffset * shiftStep) % n) + n) % n
+        val startIndex = posMod(-monthOffset * shiftStep, n)
         val rotatedParticipants = (0 until n).map { i ->
             sortedParticipants[(startIndex + i) % n]
         }
@@ -264,22 +249,23 @@ object RotationEngine {
 
         for (participant in rotatedParticipants) {
             val count = participant.count
-            if (count <= 0 || currentPara > TOTAL_QURAN_PARAS) continue
+            if (count <= 0) continue
 
             val actualStart = currentPara
-            val actualEnd = (currentPara + count - 1).coerceAtMost(TOTAL_QURAN_PARAS)
+            // End para wrapping circularly around 1..30 without stopping at 30
+            val actualEnd = posMod(actualStart - 1 + count - 1, TOTAL_QURAN_PARAS) + 1
 
             assignments.add(
                 ParaAssignment(
                     participantId = participant.id,
                     participantName = participant.name,
-                    allocatedCount = actualEnd - actualStart + 1,
+                    allocatedCount = count,
                     startPara = actualStart,
                     endPara = actualEnd
                 )
             )
 
-            currentPara = actualEnd + 1
+            currentPara = posMod(actualEnd, TOTAL_QURAN_PARAS) + 1
         }
 
         return assignments.sortedWith(paraFirstComparator)

@@ -13,16 +13,21 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.QrCode2
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -37,13 +42,15 @@ import com.example.ui.components.SecondaryEditorialButton
 @Composable
 fun ShareDistributionDialog(
     shareText: String,
+    roomPasscode: String? = null,
+    onShowQrCode: (() -> Unit)? = null,
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(
-            shape = RoundedCornerShape(22.dp),
+            shape = RoundedCornerShape(24.dp),
             color = MaterialTheme.colorScheme.surface,
             border = BorderStroke(1.2.dp, MaterialTheme.colorScheme.secondary.copy(alpha = 0.5f)),
             tonalElevation = 8.dp,
@@ -56,26 +63,66 @@ fun ShareDistributionDialog(
                     .padding(22.dp)
                     .fillMaxWidth()
             ) {
-                Surface(
-                    shape = RoundedCornerShape(6.dp),
-                    color = MaterialTheme.colorScheme.secondaryContainer
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = "ORDERED 1 → 30 SUMMARY",
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 0.8.sp,
-                            fontSize = 10.sp
-                        ),
-                        color = MaterialTheme.colorScheme.onSecondaryContainer,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                    )
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = MaterialTheme.colorScheme.secondaryContainer
+                    ) {
+                        Text(
+                            text = "ASCENDING PARA SCHEDULE",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 0.8.sp,
+                                fontSize = 10.sp
+                            ),
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                        )
+                    }
+
+                    if (!roomPasscode.isNullOrBlank() && onShowQrCode != null) {
+                        Surface(
+                            onClick = {
+                                onDismiss()
+                                onShowQrCode()
+                            },
+                            shape = RoundedCornerShape(10.dp),
+                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.75f),
+                            border = BorderStroke(0.8.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)),
+                            modifier = Modifier.testTag("share_dialog_qr_button")
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.QrCode2,
+                                    contentDescription = "Show QR Code",
+                                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                                Spacer(modifier = Modifier.width(5.dp))
+                                Text(
+                                    text = "QR Code",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 11.sp
+                                    ),
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                            }
+                        }
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Text(
-                    text = "Share Distribution Progress",
+                    text = "Share Distribution",
                     style = MaterialTheme.typography.titleLarge.copy(
                         fontWeight = FontWeight.Bold,
                         letterSpacing = (-0.2).sp
@@ -84,7 +131,7 @@ fun ShareDistributionDialog(
                 )
 
                 Text(
-                    text = "Ordered 1 to 30 with Para numbers first, ready for messaging apps",
+                    text = "Formatted with Name first and Paras in ascending order (1 → 30)",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -97,7 +144,7 @@ fun ShareDistributionDialog(
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(240.dp)
+                        .height(235.dp)
                 ) {
                     Text(
                         text = shareText,
@@ -127,7 +174,7 @@ fun ShareDistributionDialog(
                             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                             val clip = ClipData.newPlainText("Quran Baanto", shareText)
                             clipboard.setPrimaryClip(clip)
-                            Toast.makeText(context, "Copied distribution summary to clipboard", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "Copied schedule to clipboard", Toast.LENGTH_SHORT).show()
                             onDismiss()
                         },
                         modifier = Modifier
@@ -144,7 +191,7 @@ fun ShareDistributionDialog(
                                 putExtra(Intent.EXTRA_TEXT, shareText)
                                 type = "text/plain"
                             }
-                            val shareIntent = Intent.createChooser(sendIntent, "Share Distribution Progress via")
+                            val shareIntent = Intent.createChooser(sendIntent, "Share Distribution via")
                             context.startActivity(shareIntent)
                             onDismiss()
                         },

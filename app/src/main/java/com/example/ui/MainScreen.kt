@@ -236,8 +236,8 @@ fun MainScreen() {
                 composable(BottomNavItem.Distributions.route) {
                     DistributionListScreen(
                         distributionViewModel = distributionViewModel,
-                        onCreateNewDistribution = { type ->
-                            navController.navigate("create_edit_distribution?type=${type.name}")
+                        onCreateNewDistribution = { type, mode ->
+                            navController.navigate("create_edit_distribution?type=${type.name}&mode=${mode.name}")
                         },
                         onOpenDistributionDetail = { distId ->
                             navController.navigate("distribution_detail/$distId")
@@ -257,13 +257,17 @@ fun MainScreen() {
                         onEditDistribution = { idToEdit ->
                             navController.navigate("create_edit_distribution?distId=$idToEdit")
                         },
+                        onOpenParaReader = { paraNum ->
+                            quranViewModel.selectPara(paraNum)
+                            navController.navigate("quran_reader_para/$paraNum")
+                        },
                         onBack = { navController.popBackStack() }
                     )
                 }
 
                 // Create or Edit Distribution Screen
                 composable(
-                    route = "create_edit_distribution?distId={distId}&type={type}",
+                    route = "create_edit_distribution?distId={distId}&type={type}&mode={mode}",
                     arguments = listOf(
                         navArgument("distId") {
                             type = NavType.LongType
@@ -272,23 +276,40 @@ fun MainScreen() {
                         navArgument("type") {
                             type = NavType.StringType
                             defaultValue = "KHATM"
+                        },
+                        navArgument("mode") {
+                            type = NavType.StringType
+                            defaultValue = "LOCAL"
                         }
                     )
                 ) { backStackEntry ->
                     val rawDistId = backStackEntry.arguments?.getLong("distId") ?: -1L
                     val distId = if (rawDistId == -1L) null else rawDistId
                     val typeString = backStackEntry.arguments?.getString("type") ?: "KHATM"
+                    val modeString = backStackEntry.arguments?.getString("mode") ?: "LOCAL"
                     val initialType = try {
                         com.example.data.db.DistributionType.valueOf(typeString)
                     } catch (e: Exception) {
                         com.example.data.db.DistributionType.KHATM
                     }
+                    val initialMode = try {
+                        com.example.data.db.RoomMode.valueOf(modeString)
+                    } catch (e: Exception) {
+                        com.example.data.db.RoomMode.LOCAL
+                    }
 
                     CreateEditDistributionScreen(
-                        distributionViewModel = distributionViewModel,
-                        existingDistributionId = distId,
+                        distributionId = distId,
                         initialType = initialType,
-                        onBack = { navController.popBackStack() }
+                        initialRoomMode = initialMode,
+                        distributionViewModel = distributionViewModel,
+                        onSaved = { savedId ->
+                            navController.popBackStack()
+                            navController.navigate("distribution_detail/$savedId") {
+                                launchSingleTop = true
+                            }
+                        },
+                        onNavigateBack = { navController.popBackStack() }
                     )
                 }
             }
@@ -298,7 +319,8 @@ fun MainScreen() {
                     isDarkTheme = isDarkTheme,
                     onToggleDarkTheme = { quranViewModel.setDarkTheme(it) },
                     onDismiss = { showSettingsSheet = false },
-                    quranViewModel = quranViewModel
+                    quranViewModel = quranViewModel,
+                    distributionViewModel = distributionViewModel
                 )
             }
         }

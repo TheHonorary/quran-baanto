@@ -1,0 +1,139 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper: Ensure caller is authenticated via Firebase Auth
+    function isSignedIn() {
+      return request.auth != null && request.auth.uid != null;
+    }
+
+    // Helper: Validate bounded string field
+    function isValidString(val, minLen, maxLen) {
+      return val is string && val.size() >= minLen && val.size() <= maxLen;
+    }
+
+    // 1. User Profiles: Strict Owner-Only Access (GDPR / Privacy Hardened)
+    // - Collection enumeration is strictly forbidden (allow list: if false)
+    // - Only the authenticated owner of that exact UID can get, create, update, or delete their profile
+    match /users/{uid} {
+      allow list: if false;
+      allow get: if isSignedIn() && request.auth.uid == uid;
+      allow create, update: if isSignedIn()
+        && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['uid', 'displayName', 'isAnonymous', 'updatedAt'])
+        && request.resource.data.uid == uid
+        && isValidString(request.resource.data.displayName, 1, 60)
+        && request.resource.data.isAnonymous is bool
+        && request.resource.data.updatedAt is int;
+      allow delete: if isSignedIn() && request.auth.uid == uid;
+    }
+
+    // 2. Online Rooms: Keyed by Salted SHA-256 Capability Hash of the Room Passcode
+    // - Collection listing/enumeration is strictly forbidden (allow list: if false)
+    // - Strict schema allowlist prevents payload stuffing / storage abuse
+    // - Immutable hostUidHash & type prevent room ownership hijacking on update
+    match /rooms/{roomCapabilityHash} {
+      allow list: if false;
+      allow get: if isSignedIn() && roomCapabilityHash.size() == 64;
+
+      allow create: if isSignedIn()
+        && roomCapabilityHash.size() == 64
+        && request.resource.data.keys().hasOnly([
+          'name', 'type', 'roomMode', 'totalTarget', 'roundNumber',
+          'startYear', 'startMonth', 'isClosedForever', 'closedSummaryText',
+          'hostUidHash', 'updatedAt'
+        ])
+        && isValidString(request.resource.data.name, 1, 80)
+        && request.resource.data.type in ['KHATM', 'ONE_TIME_KHATM', 'AMAL']
+        && request.resource.data.roomMode == 'ONLINE'
+        && request.resource.data.totalTarget is int
+        && request.resource.data.totalTarget >= 1
+        && request.resource.data.totalTarget <= 100000
+        && request.resource.data.roundNumber is int
+        && request.resource.data.roundNumber >= 1
+        && request.resource.data.isClosedForever is bool
+        && isValidString(request.resource.data.hostUidHash, 64, 64)
+        && request.resource.data.updatedAt is int;
+
+      allow update: if isSignedIn()
+        && roomCapabilityHash.size() == 64
+        && request.resource.data.keys().hasOnly([
+          'name', 'type', 'roomMode', 'totalTarget', 'roundNumber',
+          'startYear', 'startMonth', 'isClosedForever', 'closedSummaryText',
+          'hostUidHash', 'updatedAt'
+        ])
+        // Prevent room host hijacking and immutable room type tampering
+        && request.resource.data.hostUidHash == resource.data.hostUidHash
+        && request.resource.data.type == resource.data.type
+        && isValidString(request.resource.data.name, 1, 80)
+        && request.resource.data.totalTarget is int
+        && request.resource.data.totalTarget >= 1
+        && request.resource.data.totalTarget <= 100000
+        && request.resource.data.roundNumber is int
+        && request.resource.data.roundNumber >= 1
+        && request.resource.data.isClosedForever is bool
+        && request.resource.data.updatedAt is int;
+
+      allow delete: if false;
+
+      // 3. Room Participants / Para & Amal Claims Subcollection
+      // - Enforces strict field allowlist & max 100 slots displayOrder bound
+      // - Preserves slot ownerTokenHash on updates to prevent slot ownership hijacking
+      match /participants/{slotId} {
+        allow read: if isSignedIn() && roomCapabilityHash.size() == 64;
+
+        allow create: if isSignedIn()
+          && roomCapabilityHash.size() == 64
+          && slotId.size() <= 48
+          && request.resource.data.keys().hasOnly([
+            'docId', 'ownerTokenHash', 'name', 'allocatedCount', 'completedCount',
+            'displayOrder', 'specificParaNumber', 'isGuestEntry',
+            'isCompleted', 'completedMonthsCsv', 'updatedAt'
+          ])
+          && isValidString(request.resource.data.name, 1, 60)
+          && isValidString(request.resource.data.ownerTokenHash, 64, 64)
+          && request.resource.data.allocatedCount is int
+          && request.resource.data.allocatedCount >= 1
+          && request.resource.data.allocatedCount <= 100000
+          && (!('completedCount' in request.resource.data) || (request.resource.data.completedCount is int && request.resource.data.completedCount >= 0 && request.resource.data.completedCount <= 100000))
+          && request.resource.data.displayOrder is int
+          && request.resource.data.displayOrder >= 1
+          && request.resource.data.displayOrder <= 200
+          && request.resource.data.isCompleted is bool
+          && request.resource.data.isGuestEntry is bool
+          && isValidString(request.resource.data.completedMonthsCsv, 0, 400)
+          && request.resource.data.updatedAt is int;
+
+        allow update: if isSignedIn()
+          && roomCapabilityHash.size() == 64
+          && slotId.size() <= 48
+          && request.resource.data.keys().hasOnly([
+            'docId', 'ownerTokenHash', 'name', 'allocatedCount', 'completedCount',
+            'displayOrder', 'specificParaNumber', 'isGuestEntry',
+            'isCompleted', 'completedMonthsCsv', 'updatedAt'
+          ])
+          && request.resource.data.ownerTokenHash == resource.data.ownerTokenHash
+          && isValidString(request.resource.data.name, 1, 60)
+          && request.resource.data.allocatedCount is int
+          && request.resource.data.allocatedCount >= 1
+          && request.resource.data.allocatedCount <= 100000
+          && (!('completedCount' in request.resource.data) || (request.resource.data.completedCount is int && request.resource.data.completedCount >= 0 && request.resource.data.completedCount <= 100000))
+          && request.resource.data.displayOrder is int
+          && request.resource.data.displayOrder >= 1
+          && request.resource.data.displayOrder <= 200
+          && request.resource.data.isCompleted is bool
+          && request.resource.data.isGuestEntry is bool
+          && isValidString(request.resource.data.completedMonthsCsv, 0, 400)
+          && request.resource.data.updatedAt is int;
+
+        allow delete: if isSignedIn() && roomCapabilityHash.size() == 64;
+      }
+    }
+
+    // Deny all other paths by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

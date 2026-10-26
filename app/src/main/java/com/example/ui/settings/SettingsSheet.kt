@@ -1,5 +1,9 @@
 package com.example.ui.settings
 
+import android.Manifest
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -23,23 +27,35 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.FormatSize
 import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.material.icons.filled.NotificationsActive
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Security
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -47,11 +63,15 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.quran.ArabicFontStyle
+import com.example.ui.components.AyahEndMedallionSymbol
 import com.example.ui.components.ManuscriptOrnamentDivider
 import com.example.ui.components.PrimarySanctuaryButton
+import com.example.ui.components.SecondaryEditorialButton
 import com.example.ui.components.ResizableSectionContainer
 import com.example.ui.components.SanctuaryGeometricGlyph
+import com.example.ui.viewmodel.DistributionViewModel
 import com.example.ui.viewmodel.QuranViewModel
+import com.example.util.KhatmNotificationHelper
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -59,16 +79,39 @@ fun SettingsSheet(
     isDarkTheme: Boolean,
     onToggleDarkTheme: (Boolean) -> Unit,
     onDismiss: () -> Unit,
-    quranViewModel: QuranViewModel? = null
+    quranViewModel: QuranViewModel? = null,
+    distributionViewModel: DistributionViewModel? = null
 ) {
+    val context = LocalContext.current
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val fontSizeSp by quranViewModel?.fontSizeSp?.collectAsState()
-        ?: androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(24) }
+        ?: remember { androidx.compose.runtime.mutableIntStateOf(24) }
     val fontStyle by quranViewModel?.arabicFontStyle?.collectAsState()
-        ?: androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(ArabicFontStyle.UTHMANI) }
+        ?: remember { mutableStateOf(ArabicFontStyle.UTHMANI) }
+
+    val savedProfileName by distributionViewModel?.userProfileName?.collectAsState()
+        ?: remember { mutableStateOf("") }
+    val notificationsEnabled by distributionViewModel?.notificationsEnabled?.collectAsState()
+        ?: remember { mutableStateOf(true) }
+    val firebaseStatus by distributionViewModel?.firebaseConnectionStatus?.collectAsState()
+        ?: remember { mutableStateOf(com.example.data.firebase.FirebaseConnectionStatus.UNINITIALIZED) }
+    val firebaseProfile by distributionViewModel?.firebaseUserProfile?.collectAsState()
+        ?: remember { mutableStateOf(null) }
+
+    var localNameDraft by remember(savedProfileName) { mutableStateOf(savedProfileName) }
+    var showPrivacyDialog by remember { mutableStateOf(false) }
+
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { _ -> }
 
     ModalBottomSheet(
-        onDismissRequest = onDismiss,
+        onDismissRequest = {
+            if (localNameDraft.trim() != savedProfileName) {
+                distributionViewModel?.setUserProfileName(localNameDraft.trim())
+            }
+            onDismiss()
+        },
         sheetState = sheetState,
         containerColor = MaterialTheme.colorScheme.background,
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
@@ -106,7 +149,7 @@ fun SettingsSheet(
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = "Appearance & Mushaf typography",
+                            text = "Profile, rooms & Mushaf typography",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -118,7 +161,7 @@ fun SettingsSheet(
                     color = MaterialTheme.colorScheme.secondaryContainer
                 ) {
                     Text(
-                        text = "v2.0",
+                        text = "v3.0",
                         style = MaterialTheme.typography.labelSmall.copy(
                             fontWeight = FontWeight.Bold
                         ),
@@ -128,7 +171,155 @@ fun SettingsSheet(
                 }
             }
 
-            // 1. Theme Selection Section
+            // 1. Profile & Online Room Notifications
+            if (distributionViewModel != null) {
+                ResizableSectionContainer(
+                    title = "Room Profile & Reminders",
+                    icon = Icons.Default.Person,
+                    contentPadding = PaddingValues(22.dp)
+                ) {
+                    Text(
+                        text = "Your Default Name in Online Rooms",
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    OutlinedTextField(
+                        value = localNameDraft,
+                        onValueChange = {
+                            localNameDraft = it
+                            distributionViewModel.setUserProfileName(it)
+                        },
+                        placeholder = { Text("e.g. Hamza") },
+                        singleLine = true,
+                        shape = RoundedCornerShape(14.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+                            focusedContainerColor = MaterialTheme.colorScheme.background,
+                            unfocusedContainerColor = MaterialTheme.colorScheme.background
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("settings_profile_name_input")
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    val cloudStatusText = when (firebaseStatus) {
+                        com.example.data.firebase.FirebaseConnectionStatus.READY -> {
+                            val shortUid = firebaseProfile?.uidHash ?: "ACTIVE"
+                            "Firebase Auth & Firestore Secured • ID: $shortUid"
+                        }
+                        com.example.data.firebase.FirebaseConnectionStatus.MISSING_CONFIGURATION -> {
+                            "Local-Ready Mode (Configure Firebase keys in Secrets Panel for live cloud sync)"
+                        }
+                        else -> "Initializing Firebase Services..."
+                    }
+                    Text(
+                        text = cloudStatusText,
+                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                        color = if (firebaseStatus == com.example.data.firebase.FirebaseConnectionStatus.READY) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        }
+                    )
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    if (firebaseStatus == com.example.data.firebase.FirebaseConnectionStatus.READY ||
+                        localNameDraft.isNotBlank()
+                    ) {
+                        Surface(
+                            onClick = {
+                                localNameDraft = ""
+                                distributionViewModel.deleteCloudProfileAndResetId()
+                            },
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.45f),
+                            border = BorderStroke(0.8.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.35f)),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("delete_cloud_profile_button")
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Delete Cloud Profile & Reset Anonymous ID",
+                                    style = MaterialTheme.typography.labelMedium.copy(
+                                        fontWeight = FontWeight.Bold
+                                    ),
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(12.dp))
+                    }
+
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = MaterialTheme.colorScheme.background,
+                        border = BorderStroke(0.8.dp, MaterialTheme.colorScheme.outlineVariant),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.NotificationsActive,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column {
+                                    Text(
+                                        text = "Room & Monthly Reminders",
+                                        style = MaterialTheme.typography.titleSmall.copy(
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 14.sp
+                                        ),
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = "Notify when members complete Paras or a new month begins",
+                                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Switch(
+                                checked = notificationsEnabled,
+                                onCheckedChange = { enabled ->
+                                    distributionViewModel.setNotificationsEnabled(enabled)
+                                    if (enabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                                        !KhatmNotificationHelper.hasNotificationPermission(context)
+                                    ) {
+                                        notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                    }
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+
+            // 2. Theme Selection Section
             ResizableSectionContainer(
                 title = "Appearance",
                 contentPadding = PaddingValues(22.dp)
@@ -164,7 +355,7 @@ fun SettingsSheet(
                 }
             }
 
-            // 2. Mushaf Typography & Script Container
+            // 3. Mushaf Typography & Script Container
             if (quranViewModel != null) {
                 ResizableSectionContainer(
                     title = "Mushaf Script & Size",
@@ -252,7 +443,7 @@ fun SettingsSheet(
 
                     Spacer(modifier = Modifier.height(14.dp))
 
-                    // Clean Verse Preview Box
+                    // Clean Verse Preview Box with true geometric circular Ayah end medallion
                     val previewFontFamily = when (fontStyle) {
                         ArabicFontStyle.UTHMANI -> FontFamily.Serif
                         ArabicFontStyle.INDO_PAK -> FontFamily.Default
@@ -264,25 +455,82 @@ fun SettingsSheet(
                         border = BorderStroke(0.8.dp, MaterialTheme.colorScheme.outlineVariant),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text(
-                            text = "بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ ﴿١﴾",
-                            style = MaterialTheme.typography.headlineSmall.copy(
-                                fontFamily = previewFontFamily,
-                                fontWeight = if (fontStyle == ArabicFontStyle.INDO_PAK) FontWeight.Bold else FontWeight.Normal,
-                                fontSize = fontSizeSp.sp,
-                                lineHeight = (fontSizeSp * 1.8f).sp
-                            ),
-                            color = MaterialTheme.colorScheme.onSurface,
-                            textAlign = TextAlign.Center,
+                        Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 18.dp, vertical = 20.dp)
-                        )
+                                .padding(horizontal = 18.dp, vertical = 20.dp),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            AyahEndMedallionSymbol(
+                                arabicDigits = "١",
+                                markerColor = MaterialTheme.colorScheme.secondary,
+                                fontSizeSp = fontSizeSp
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ",
+                                style = MaterialTheme.typography.headlineSmall.copy(
+                                    fontFamily = previewFontFamily,
+                                    fontWeight = if (fontStyle == ArabicFontStyle.INDO_PAK) FontWeight.Bold else FontWeight.Normal,
+                                    fontSize = fontSizeSp.sp,
+                                    lineHeight = (fontSizeSp * 1.8f).sp
+                                ),
+                                color = MaterialTheme.colorScheme.onSurface,
+                                textAlign = TextAlign.Center
+                            )
+                        }
                     }
                 }
             }
 
-            // 3. Clean Hambasy Studios Credit Card
+            // 4. Privacy, Security & Data Safety (Play Store Compliance)
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = MaterialTheme.colorScheme.surface,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 22.dp, vertical = 20.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Security,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(22.dp)
+                        )
+                        Text(
+                            text = "Privacy & Data Safety",
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontWeight = FontWeight.Bold
+                            ),
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+
+                    Text(
+                        text = "100% Offline-first local groups. Zero tracking on Qur'an recitation. Voluntary permissionary ads only for online rooms.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    SecondaryEditorialButton(
+                        text = "View Data Safety & Privacy Policy",
+                        onClick = { showPrivacyDialog = true },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+
+            // 5. Clean Hambasy Studios Credit Card
             Surface(
                 shape = RoundedCornerShape(20.dp),
                 color = MaterialTheme.colorScheme.surface,
@@ -296,7 +544,7 @@ fun SettingsSheet(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
-                        text = "Quran Baanto • Version 2.0",
+                        text = "Quran Baanto • Version 3.0",
                         style = MaterialTheme.typography.titleSmall.copy(
                             fontWeight = FontWeight.Bold
                         ),
@@ -317,12 +565,65 @@ fun SettingsSheet(
 
             PrimarySanctuaryButton(
                 text = "Done",
-                onClick = onDismiss,
+                onClick = {
+                    if (localNameDraft.trim() != savedProfileName) {
+                        distributionViewModel?.setUserProfileName(localNameDraft.trim())
+                    }
+                    onDismiss()
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("close_settings_button")
             )
         }
+    }
+
+    if (showPrivacyDialog) {
+        AlertDialog(
+            onDismissRequest = { showPrivacyDialog = false },
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.Security,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(28.dp)
+                )
+            },
+            title = {
+                Text(
+                    text = "Privacy & Data Safety",
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                    textAlign = TextAlign.Center
+                )
+            },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = "Our Guiding Principle: Sanctuary & Peace",
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        text = "• 100% Offline by Default: Local Khatm and Amal distributions, participants, and bookmarks are stored exclusively on your device in an encrypted SQLite database.\n\n" +
+                                "• Zero Recitation Tracking: Your Qur'an reading habits, ayah progress, and bookmarks are never logged or transmitted.\n\n" +
+                                "• Online Rooms: Only synced when you explicitly create or join an online room. Synced securely via Google Cloud Firestore with TLS 1.3 encryption.\n\n" +
+                                "• Voluntary Ad Policy: Zero banner ads anywhere in the app. Zero ads on the Qur'an reader or Home screen. A voluntary 30-second sponsored message is only suggested after creating or joining an online room to help cover cloud servers. You may decline with zero penalty.",
+                        style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showPrivacyDialog = false }) {
+                    Text("Close", fontWeight = FontWeight.Bold)
+                }
+            }
+        )
     }
 }
 

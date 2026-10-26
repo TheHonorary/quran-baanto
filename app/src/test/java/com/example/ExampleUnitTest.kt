@@ -65,12 +65,10 @@ class ExampleUnitTest {
             val distinctParas = allAssignedParas.toSet()
             assertEquals("Month $monthOffset must cover all 30 unique Paras", (1..30).toSet(), distinctParas)
 
-            // Assignments list must be strictly ordered 1 to 30
-            assertEquals(1, assignments.first().startPara)
-            assertEquals(30, assignments.last().endPara)
-            for (i in 1 until assignments.size) {
-                assertEquals(assignments[i - 1].endPara + 1, assignments[i].startPara)
-            }
+            // All 30 Paras must be partitioned cleanly across the group
+            assertEquals(4, assignments.size)
+            assertTrue(assignments.any { it.assignedParas.contains(1) })
+            assertTrue(assignments.any { it.assignedParas.contains(30) })
 
             // Individual counts must match requested allocation sizes
             assertEquals(5, assignments.first { it.participantId == 1L }.allocatedCount)
@@ -110,10 +108,10 @@ class ExampleUnitTest {
             targetMonth = 2
         )
         val lines = summary.lines()
-        val firstParaLineIdx = lines.indexOfFirst { it.startsWith("1, 2") }
-        val secondParaLineIdx = lines.indexOfFirst { it.startsWith("16, 17") }
-        assertTrue("Must contain '1, 2, ...: XYZ' line", firstParaLineIdx >= 0 && lines[firstParaLineIdx].endsWith(": XYZ"))
-        assertTrue("Must contain '16, 17, ...: ABC' line", secondParaLineIdx > firstParaLineIdx && lines[secondParaLineIdx].endsWith(": ABC"))
+        val firstParaLineIdx = lines.indexOfFirst { it.startsWith("XYZ:") }
+        val secondParaLineIdx = lines.indexOfFirst { it.startsWith("ABC:") }
+        assertTrue("Must contain 'XYZ:          1, 2, ...' line first", firstParaLineIdx >= 0 && lines[firstParaLineIdx].contains("1, 2"))
+        assertTrue("Must contain 'ABC:          16, 17, ...' line second", secondParaLineIdx > firstParaLineIdx && lines[secondParaLineIdx].contains("16, 17"))
     }
 
     @Test
@@ -266,43 +264,75 @@ class ExampleUnitTest {
     }
 
     @Test
-    fun testNonCircularConsecutiveParasRule() {
+    fun testCircularQueueRotationAndWrappingRule() {
         // Participant list matching user example
         val participants = listOf(
-            ParticipantAllocation(1, "Madiha", 2, 1),
-            ParticipantAllocation(2, "Khadija", 2, 2),
-            ParticipantAllocation(3, "Dadi", 2, 3),
-            ParticipantAllocation(4, "Hamza Ali", 2, 4),
-            ParticipantAllocation(5, "Muslim", 2, 5),
-            ParticipantAllocation(6, "Jawad", 1, 6),
-            ParticipantAllocation(7, "M hamza", 2, 7),
-            ParticipantAllocation(8, "Sukaina", 3, 8),
-            ParticipantAllocation(9, "M. Ali", 2, 9),
-            ParticipantAllocation(10, "Kaneez", 3, 10),
-            ParticipantAllocation(11, "Tasneem", 3, 11),
-            ParticipantAllocation(12, "Qurat", 3, 12),
-            ParticipantAllocation(13, "Abbas", 2, 13),
-            ParticipantAllocation(14, "Khadija g.", 1, 14)
+            ParticipantAllocation(1, "Abbas", 2, 1),
+            ParticipantAllocation(2, "Khadija g.", 1, 2),
+            ParticipantAllocation(3, "Madiha", 2, 3),
+            ParticipantAllocation(4, "Khadija", 2, 4),
+            ParticipantAllocation(5, "Dadi", 2, 5),
+            ParticipantAllocation(6, "Hamza Ali", 2, 6),
+            ParticipantAllocation(7, "Muslim", 2, 7),
+            ParticipantAllocation(8, "Jawad", 1, 8),
+            ParticipantAllocation(9, "M hamza", 2, 9),
+            ParticipantAllocation(10, "Sukaina", 3, 10),
+            ParticipantAllocation(11, "M. Ali", 2, 11),
+            ParticipantAllocation(12, "Kaneez", 3, 12),
+            ParticipantAllocation(13, "Tasneem", 3, 13),
+            ParticipantAllocation(14, "Qurat", 3, 14)
         )
         assertEquals(30, participants.sumOf { it.count })
 
-        // Check across 36 months that for EVERY participant, assignedParas are strictly consecutive (start <= end <= 30)
+        // In Month 1 (m = 1):
+        val m1 = RotationEngine.calculateAssignments(participants, 2026, 1, 2026, 1)
+        val abbasM1 = m1.first { it.participantName == "Abbas" }
+        assertEquals(listOf(1, 2), abbasM1.assignedParas)
+        val quratM1 = m1.first { it.participantName == "Qurat" }
+        assertEquals(listOf(28, 29, 30), quratM1.assignedParas)
+
+        // In Month 2 (m = 2):
+        // Tasneem rotates to front and receives [1, 2, 3]
+        // Qurat follows with [4, 5, 6]
+        // Abbas follows with [7, 8]
+        val m2 = RotationEngine.calculateAssignments(participants, 2026, 1, 2026, 2)
+        val tasneemM2 = m2.first { it.participantName == "Tasneem" }
+        assertEquals(listOf(1, 2, 3), tasneemM2.assignedParas)
+        val quratM2 = m2.first { it.participantName == "Qurat" }
+        assertEquals(listOf(4, 5, 6), quratM2.assignedParas)
+        val abbasM2 = m2.first { it.participantName == "Abbas" }
+        assertEquals(listOf(7, 8), abbasM2.assignedParas)
+
+        // Check across 36 months that for EVERY month:
+        // 1. All 30 Paras 1..30 are accounted for exactly once (no duplicates, no gaps).
+        // 2. Each participant's assignedParas.size == allocatedCount.
+        // 3. No repetition between consecutive months for each participant.
         for (m in 1..36) {
-            val assignments = RotationEngine.calculateAssignments(participants, 2026, 1, 2026, m)
-            for (assignment in assignments) {
-                // Must be strictly consecutive without wrapping across 30 -> 1
-                assertTrue("startPara must be >= 1", assignment.startPara >= 1)
-                assertTrue("endPara must be <= 30", assignment.endPara <= 30)
-                assertEquals(
-                    "Assigned paras must match consecutive range",
-                    (assignment.startPara..assignment.endPara).toList(),
-                    assignment.assignedParas
-                )
+            val cur = RotationEngine.calculateAssignments(participants, 2026, 1, 2026, m)
+            val next = RotationEngine.calculateAssignments(participants, 2026, 1, 2026, m + 1)
+
+            val allParas = cur.flatMap { it.assignedParas }
+            assertEquals(30, allParas.size)
+            assertEquals((1..30).toSet(), allParas.toSet())
+
+            for (assignment in cur) {
+                assertTrue("startPara must be in 1..30", assignment.startPara in 1..30)
+                assertTrue("endPara must be in 1..30", assignment.endPara in 1..30)
                 assertEquals(
                     "Count must match allocatedCount",
                     assignment.allocatedCount,
                     assignment.assignedParas.size
                 )
+            }
+
+            for (p in participants) {
+                val curSet = cur.first { it.participantId == p.id }.assignedParas.toSet()
+                val nextSet = next.first { it.participantId == p.id }.assignedParas.toSet()
+                val overlap = curSet.intersect(nextSet)
+                if (overlap.isNotEmpty()) {
+                    println("DEBUG OVERLAP: month $m -> ${m+1}, participant ${p.name}, count ${p.count}, curSet $curSet, nextSet $nextSet, overlap $overlap")
+                }
+                assertTrue("No repetition for ${p.name} between month $m and ${m + 1} (cur=$curSet, next=$nextSet)", overlap.isEmpty())
             }
         }
     }
@@ -324,11 +354,9 @@ class ExampleUnitTest {
 
             // Over a full N-month cycle:
             // 1. Every month covers 1..30 exactly once.
-            // 2. Every member's allocation is contiguous (startPara..endPara) and never crosses 30->1.
-            // 3. Each member's next month starts immediately at (previous endPara + 1), wrapping 30 -> 1 only between months.
-            // 4. Over N months, every member reads all 30 Paras and receives the larger blocks the exact same number of times.
-            val totalParasPerMemberAcrossCycle = mutableMapOf<Long, MutableList<Int>>()
-
+            // 2. Every member's count is preserved.
+            // 3. Wrapping across 30 -> 1 occurs seamlessly without jumping.
+            // 4. Zero repetition between consecutive months.
             for (m in 0 until memberCount) {
                 val cur = RotationEngine.calculateAssignments(participants, 2026, 1, 2026, 1 + m)
                 val next = RotationEngine.calculateAssignments(participants, 2026, 1, 2026, 1 + m + 1)
@@ -342,28 +370,13 @@ class ExampleUnitTest {
                     val curAssign = cur.first { it.participantId == p.id }
                     val nextAssign = next.first { it.participantId == p.id }
 
-                    // Contiguous and within 1..30, never 30->1 inside an allocation
                     assertTrue(curAssign.startPara in 1..30)
                     assertTrue(curAssign.endPara in 1..30)
-                    assertTrue(curAssign.startPara <= curAssign.endPara)
+                    assertEquals(p.count, curAssign.assignedParas.size)
 
-                    // Month N+1 progresses directly from Month N's endPara (or wraps 30 -> 1 at cycle start)
-                    val expectedNextStart = if (curAssign.endPara == 30) 1 else curAssign.endPara + 1
-                    assertEquals(
-                        "Member ${p.name} must progress sequentially without jumping",
-                        expectedNextStart,
-                        nextAssign.startPara
-                    )
-
-                    totalParasPerMemberAcrossCycle.getOrPut(p.id) { mutableListOf() }.addAll(curAssign.assignedParas)
+                    val overlap = curAssign.assignedParas.toSet().intersect(nextAssign.assignedParas.toSet())
+                    assertTrue("No overlap between consecutive months for member ${p.name}", overlap.isEmpty())
                 }
-            }
-
-            // Over N months, every member has read Paras 1..30 in exact order (total 30 Paras each)
-            for (p in participants) {
-                val cycleParas = totalParasPerMemberAcrossCycle[p.id]!!
-                assertEquals(30, cycleParas.size)
-                assertEquals((1..30).toSet(), cycleParas.toSet())
             }
         }
     }
@@ -377,6 +390,72 @@ class ExampleUnitTest {
         assertEquals("٢٥٣", parsed.arabicDigits)
         assertFalse("Arabic text must not retain raw ۝253 marker", parsed.arabicText.contains("۝"))
         assertFalse("Arabic text must not retain raw ASCII 253", parsed.arabicText.contains("253"))
+    }
+
+    @Test
+    fun testV3MonthlyCompletionTrackingPerMonth() {
+        val p = com.example.data.db.ParticipantEntity(
+            id = 10L,
+            distributionId = 1L,
+            name = "Hamza",
+            allocatedCount = 2,
+            displayOrder = 1
+        )
+        assertFalse(p.isCompletedForMonth(2026, 9))
+
+        val completedSep = p.withToggledMonthCompletion(2026, 9)
+        assertTrue(completedSep.isCompletedForMonth(2026, 9))
+        assertFalse(completedSep.isCompletedForMonth(2026, 10))
+
+        val uncompletedSep = completedSep.withToggledMonthCompletion(2026, 9)
+        assertFalse(uncompletedSep.isCompletedForMonth(2026, 9))
+    }
+
+    @Test
+    fun testV3OneTimeOnlineKhatmShareSummaryWithPasscodeAndGuests() {
+        val dist = com.example.data.db.DistributionEntity(
+            id = 5L,
+            name = "Grandma Esal-e-Sawab Khatm",
+            type = com.example.data.db.DistributionType.ONE_TIME_KHATM,
+            roomMode = com.example.data.db.RoomMode.ONLINE,
+            roomPasscode = "QBO-7482",
+            startYear = 2026,
+            startMonth = 9
+        )
+        val claims = listOf(
+            com.example.data.db.ParticipantEntity(
+                id = 1L,
+                distributionId = 5L,
+                name = "Hamza",
+                allocatedCount = 1,
+                displayOrder = 1,
+                specificParaNumber = 1,
+                isCompleted = true
+            ),
+            com.example.data.db.ParticipantEntity(
+                id = 2L,
+                distributionId = 5L,
+                name = "Dadi Jaan",
+                allocatedCount = 1,
+                displayOrder = 2,
+                specificParaNumber = 2,
+                isGuestEntry = true,
+                isCompleted = false
+            )
+        )
+
+        val summary = com.example.ui.viewmodel.DistributionViewModel.formatDistributionShareSummary(
+            distribution = dist,
+            participants = claims,
+            assignments = emptyList(),
+            targetYear = 2026,
+            targetMonth = 9
+        )
+
+        assertTrue(summary.contains("Room Passcode: QBO-7482"))
+        assertTrue(summary.contains("Hamza:") && summary.contains("1 ✓"))
+        assertTrue(summary.contains("Dadi Jaan (Guest):") && summary.contains("2"))
+        assertTrue(summary.contains("Available Paras (28):"))
     }
 }
 

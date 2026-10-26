@@ -61,3 +61,22 @@ val DarkWarmOutlineVariant = Color(0xFF2B3142)
 // Semantic Status Colors
 val ErrorCrimson = Color(0xFFB3261E)
 val ErrorCrimsonDark = Color(0xFFF2B8B5)
+
+// ============================================================================
+// ROOM MODE GLOW ACCENTS — Online (Gold Glow) vs Local (Blue Glow)
+// ============================================================================
+val OnlineGoldGlow = Color(0xFFD4A017)
+val OnlineGoldAccent = Color(0xFFD4A017)
+val OnlineGoldBright = Color(0xFFE8BC44)
+val OnlineGoldContainer = Color(0xFFFAF0D4)
+val OnlineGoldOnContainer = Color(0xFF473102)
+val OnlineGoldSurfaceLight = Color(0xFFFEFBF2)
+val OnlineGoldSurfaceDark = Color(0xFF231F16)
+
+val LocalBlueGlow = Color(0xFF2563EB)
+val LocalBlueAccent = Color(0xFF2563EB)
+val LocalBlueBright = Color(0xFF60A5FA)
+val LocalBlueContainer = Color(0xFFDBEAFE)
+val LocalBlueOnContainer = Color(0xFF1E3A8A)
+val LocalBlueSurfaceLight = Color(0xFFF4F8FF)
+val LocalBlueSurfaceDark = Color(0xFF172030)

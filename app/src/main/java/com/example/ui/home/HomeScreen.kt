@@ -45,6 +45,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -58,6 +59,10 @@ import com.example.data.quran.ReadMode
 import com.example.ui.components.ManuscriptOrnamentDivider
 import com.example.ui.components.PrimarySanctuaryButton
 import com.example.ui.components.ResizableSectionContainer
+import com.example.ui.theme.LocalBlueAccent
+import com.example.ui.theme.LocalBlueGlow
+import com.example.ui.theme.OnlineGoldAccent
+import com.example.ui.theme.OnlineGoldGlow
 import com.example.ui.components.SanctuaryGeometricGlyph
 import com.example.ui.components.SanctuaryTopHeader
 import com.example.ui.components.SecondaryEditorialButton
@@ -258,7 +263,7 @@ fun HomeScreen(
                     ManuscriptOrnamentDivider()
                     Spacer(modifier = Modifier.height(14.dp))
                     Text(
-                        text = "Version 2.0 • Created by Hambasy Studios",
+                        text = "Version 3.0 • Created by Hambasy Studios",
                         style = MaterialTheme.typography.labelSmall.copy(
                             fontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -491,7 +496,7 @@ private fun DistributionsHomeSectionCard(
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
-                    text = "Monthly rotating Para schedules and custom group recitations.",
+                    text = "Monthly rotating schedules, One-Time 30-Para rooms & custom Amal.",
                     style = MaterialTheme.typography.bodyMedium.copy(
                         lineHeight = 19.sp,
                         fontSize = 13.sp
@@ -530,17 +535,35 @@ private fun HomeDistributionRowCard(
     onShareClick: () -> Unit
 ) {
     val isAmal = dist.type == DistributionType.AMAL
+    val isOnline = dist.isOnline
+    val glowColor = if (isOnline) OnlineGoldGlow else LocalBlueGlow
+    val accentColor = if (isOnline) OnlineGoldAccent else LocalBlueAccent
 
     Surface(
         onClick = onClick,
-        shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.background.copy(alpha = 0.65f),
-        border = BorderStroke(0.9.dp, MaterialTheme.colorScheme.outlineVariant),
-        modifier = Modifier.fillMaxWidth()
+        shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.3.dp, accentColor.copy(alpha = 0.65f)),
+        modifier = Modifier
+            .fillMaxWidth()
+            .shadow(
+                elevation = 8.dp,
+                shape = RoundedCornerShape(18.dp),
+                ambientColor = glowColor,
+                spotColor = glowColor
+            )
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .background(
+                    Brush.horizontalGradient(
+                        colors = listOf(
+                            accentColor.copy(alpha = 0.10f),
+                            Color.Transparent
+                        )
+                    )
+                )
                 .padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
@@ -554,24 +577,34 @@ private fun HomeDistributionRowCard(
                     size = 40.dp
                 )
                 Spacer(modifier = Modifier.width(14.dp))
-                Text(
-                    text = dist.name,
-                    style = MaterialTheme.typography.titleSmall.copy(
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 15.sp
-                    ),
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
-                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = if (isOnline) "ONLINE ROOM" else "LOCAL SCHEDULE",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 9.sp,
+                            letterSpacing = 0.5.sp
+                        ),
+                        color = accentColor
+                    )
+                    Text(
+                        text = dist.name,
+                        style = MaterialTheme.typography.titleSmall.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp
+                        ),
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
             Spacer(modifier = Modifier.width(8.dp))
             Surface(
                 onClick = onShareClick,
                 shape = RoundedCornerShape(10.dp),
-                color = MaterialTheme.colorScheme.secondaryContainer,
-                border = BorderStroke(0.6.dp, MaterialTheme.colorScheme.secondary.copy(alpha = 0.35f)),
+                color = accentColor.copy(alpha = 0.15f),
+                border = BorderStroke(0.8.dp, accentColor.copy(alpha = 0.45f)),
                 modifier = Modifier.testTag("home_share_distribution_${dist.id}")
             ) {
                 Row(
@@ -582,13 +615,13 @@ private fun HomeDistributionRowCard(
                     Icon(
                         imageVector = Icons.Default.Share,
                         contentDescription = "Share ${dist.name}",
-                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                        tint = accentColor,
                         modifier = Modifier.size(14.dp)
                     )
                     Text(
                         text = "Share",
                         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                        color = accentColor
                     )
                 }
             }

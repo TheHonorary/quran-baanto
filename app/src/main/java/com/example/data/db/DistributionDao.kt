@@ -14,26 +14,56 @@ interface DistributionDao {
     @Query("SELECT * FROM distributions ORDER BY createdTimestamp DESC")
     fun getAllDistributions(): Flow<List<DistributionEntity>>
 
+    @Query("SELECT * FROM distributions WHERE roomMode = 'ONLINE'")
+    suspend fun getAllOnlineDistributionsList(): List<DistributionEntity>
+
+    @Query("SELECT * FROM distributions WHERE roomMode = 'ONLINE' AND hasPendingSync = 1")
+    suspend fun getPendingSyncDistributionsList(): List<DistributionEntity>
+
+    @Query("UPDATE distributions SET hasPendingSync = :pending, lastSyncedTimestamp = :syncedAt WHERE id = :id")
+    suspend fun updateDistributionSyncState(id: Long, pending: Boolean, syncedAt: Long)
+
+    @Query("UPDATE participants SET hasPendingSync = :pending WHERE distributionId = :distributionId")
+    suspend fun updateAllParticipantsSyncState(distributionId: Long, pending: Boolean)
+
+    @Query("UPDATE participants SET hasPendingSync = :pending WHERE id = :participantId")
+    suspend fun updateParticipantSyncState(participantId: Long, pending: Boolean)
+
     @Query("SELECT * FROM distributions WHERE id = :id")
     fun getDistributionByIdFlow(id: Long): Flow<DistributionEntity?>
 
     @Query("SELECT * FROM distributions WHERE id = :id")
     suspend fun getDistributionById(id: Long): DistributionEntity?
 
-    @Query("SELECT * FROM participants WHERE distributionId = :distributionId ORDER BY displayOrder ASC")
+    @Query("SELECT * FROM distributions WHERE UPPER(roomPasscode) = UPPER(:passcode) LIMIT 1")
+    suspend fun getDistributionByPasscode(passcode: String): DistributionEntity?
+
+    @Query("SELECT * FROM participants WHERE distributionId = :distributionId ORDER BY displayOrder ASC, id ASC")
     fun getParticipantsForDistribution(distributionId: Long): Flow<List<ParticipantEntity>>
 
-    @Query("SELECT * FROM participants ORDER BY distributionId ASC, displayOrder ASC")
+    @Query("SELECT * FROM participants ORDER BY distributionId ASC, displayOrder ASC, id ASC")
     fun getAllParticipants(): Flow<List<ParticipantEntity>>
 
-    @Query("SELECT * FROM participants WHERE distributionId = :distributionId ORDER BY displayOrder ASC")
+    @Query("SELECT * FROM participants WHERE distributionId = :distributionId ORDER BY displayOrder ASC, id ASC")
     suspend fun getParticipantsForDistributionList(distributionId: Long): List<ParticipantEntity>
+
+    @Query("SELECT * FROM participants WHERE id = :id LIMIT 1")
+    suspend fun getParticipantById(id: Long): ParticipantEntity?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertDistribution(distribution: DistributionEntity): Long
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertParticipant(participant: ParticipantEntity): Long
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertParticipants(participants: List<ParticipantEntity>)
+
+    @Update
+    suspend fun updateParticipant(participant: ParticipantEntity)
+
+    @Query("DELETE FROM participants WHERE id = :id")
+    suspend fun deleteParticipantById(id: Long)
 
     @Query("DELETE FROM participants WHERE distributionId = :distributionId")
     suspend fun deleteParticipantsByDistribution(distributionId: Long)
@@ -50,8 +80,10 @@ interface DistributionDao {
         participants: List<ParticipantEntity>
     ): Long {
         val distId = insertDistribution(distribution)
-        val updatedParticipants = participants.map { it.copy(distributionId = distId) }
-        insertParticipants(updatedParticipants)
+        if (participants.isNotEmpty()) {
+            val updatedParticipants = participants.map { it.copy(distributionId = distId) }
+            insertParticipants(updatedParticipants)
+        }
         return distId
     }
 
@@ -62,8 +94,9 @@ interface DistributionDao {
     ) {
         updateDistribution(distribution)
         deleteParticipantsByDistribution(distribution.id)
-        val updatedParticipants = participants.map { it.copy(distributionId = distribution.id) }
-        insertParticipants(updatedParticipants)
+        if (participants.isNotEmpty()) {
+            val updatedParticipants = participants.map { it.copy(distributionId = distribution.id) }
+            insertParticipants(updatedParticipants)
+        }
     }
 }
-

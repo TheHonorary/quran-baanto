@@ -837,6 +837,97 @@ fun Int.toArabicNumerals(): String {
 }
 
 /**
+ * Draws an authentic Mushaf circular Ayah end medallion with the Arabic verse number
+ * strictly centered inside the circle across all Android devices and fonts.
+ */
+@Composable
+fun AyahEndMedallionSymbol(
+    arabicDigits: String,
+    markerColor: Color,
+    fontSizeSp: Int,
+    modifier: Modifier = Modifier
+) {
+    val digitFontSize = when {
+        arabicDigits.length >= 3 -> (fontSizeSp * 0.40f).sp
+        arabicDigits.length == 2 -> (fontSizeSp * 0.47f).sp
+        else -> (fontSizeSp * 0.54f).sp
+    }
+
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(horizontal = 2.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val diameter = size.minDimension
+            val outerRadius = (diameter / 2f) * 0.86f
+            val innerRadius = outerRadius * 0.80f
+            val strokeOuter = (diameter * 0.055f).coerceAtLeast(1.1.dp.toPx())
+            val strokeInner = (diameter * 0.028f).coerceAtLeast(0.6.dp.toPx())
+
+            // Subtle inner fill so digits have crisp contrast
+            drawCircle(
+                color = markerColor.copy(alpha = 0.10f),
+                radius = outerRadius,
+                center = center
+            )
+
+            // Outer circle ring
+            drawCircle(
+                color = markerColor,
+                radius = outerRadius,
+                center = center,
+                style = Stroke(width = strokeOuter)
+            )
+
+            // Inner concentric manuscript ring
+            drawCircle(
+                color = markerColor.copy(alpha = 0.5f),
+                radius = innerRadius,
+                center = center,
+                style = Stroke(width = strokeInner)
+            )
+
+            // Four cardinal rosette accents on the outer rim
+            val dotRadius = (diameter * 0.045f).coerceAtLeast(1.dp.toPx())
+            drawCircle(
+                color = markerColor,
+                radius = dotRadius,
+                center = Offset(center.x, center.y - outerRadius)
+            )
+            drawCircle(
+                color = markerColor,
+                radius = dotRadius,
+                center = Offset(center.x, center.y + outerRadius)
+            )
+            drawCircle(
+                color = markerColor,
+                radius = dotRadius,
+                center = Offset(center.x - outerRadius, center.y)
+            )
+            drawCircle(
+                color = markerColor,
+                radius = dotRadius,
+                center = Offset(center.x + outerRadius, center.y)
+            )
+        }
+
+        Text(
+            text = arabicDigits,
+            style = MaterialTheme.typography.labelSmall.copy(
+                fontWeight = FontWeight.Bold,
+                fontSize = digitFontSize,
+                lineHeight = digitFontSize
+            ),
+            color = markerColor,
+            textAlign = TextAlign.Center,
+            maxLines = 1
+        )
+    }
+}
+
+/**
  * Fast, zero-regex Ayah parser for 120 FPS Quran reader list flattening.
  * Strips trailing '۝<digits>' or '﴿<digits>﴾' markers so each Ayah displays
  * its true verse number once inside the proper Arabic ayah medallion.
@@ -845,7 +936,7 @@ fun parseAyah(rawVerse: String, fallbackNumber: Int): ParsedAyah {
     val trimmed = rawVerse.trim()
 
     // 1. Check for Arabic End of Ayah symbol '۝' (U+06DD) used in paras.json & surahs.json
-    val ayahSymbolIdx = trimmed.lastIndexOf('۝')
+    val ayahSymbolIdx = trimmed.indexOf('۝')
     if (ayahSymbolIdx != -1) {
         val textPart = trimmed.substring(0, ayahSymbolIdx).trim()
         val digitsPart = trimmed.substring(ayahSymbolIdx + 1).trim()
