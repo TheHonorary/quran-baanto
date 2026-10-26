@@ -1038,7 +1038,7 @@ fun DistributionDetailScreen(
             roomName = pendingRoomName.ifBlank { dist.name },
             isRoomCreation = isRoomCreation,
             onAccept = {
-                ServerSupportAdManager.acceptVoluntaryAd(adScope)
+                ServerSupportAdManager.acceptVoluntaryAd(context, adScope)
             },
             onDecline = {
                 ServerSupportAdManager.dismissPrompt()

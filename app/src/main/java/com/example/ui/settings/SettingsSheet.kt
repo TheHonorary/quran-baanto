@@ -57,9 +57,18 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.foundation.text.InlineTextContent
+import androidx.compose.foundation.text.appendInlineContent
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.Placeholder
+import androidx.compose.ui.text.PlaceholderVerticalAlign
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.quran.ArabicFontStyle
@@ -100,6 +109,7 @@ fun SettingsSheet(
 
     var localNameDraft by remember(savedProfileName) { mutableStateOf(savedProfileName) }
     var showPrivacyDialog by remember { mutableStateOf(false) }
+    var sliderFontSize by remember(fontSizeSp) { mutableStateOf(fontSizeSp.toFloat()) }
 
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
@@ -366,6 +376,7 @@ fun SettingsSheet(
                             onClick = {
                                 quranViewModel.setFontSize(24)
                                 quranViewModel.setArabicFontStyle(ArabicFontStyle.UTHMANI)
+                                sliderFontSize = 24f
                             },
                             shape = RoundedCornerShape(8.dp),
                             color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
@@ -410,6 +421,8 @@ fun SettingsSheet(
 
                     Spacer(modifier = Modifier.height(22.dp))
 
+                    val currentDisplaySp = sliderFontSize.toInt().coerceIn(18, 42)
+
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -421,7 +434,7 @@ fun SettingsSheet(
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = "${fontSizeSp}sp",
+                            text = "${currentDisplaySp}sp",
                             style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                             color = MaterialTheme.colorScheme.primary
                         )
@@ -430,8 +443,11 @@ fun SettingsSheet(
                     Spacer(modifier = Modifier.height(6.dp))
 
                     Slider(
-                        value = fontSizeSp.toFloat(),
-                        onValueChange = { quranViewModel.setFontSize(it.toInt()) },
+                        value = sliderFontSize,
+                        onValueChange = { newSize ->
+                            sliderFontSize = newSize
+                            quranViewModel.setFontSize(newSize.toInt())
+                        },
                         valueRange = 18f..42f,
                         steps = 11,
                         colors = SliderDefaults.colors(
@@ -443,41 +459,102 @@ fun SettingsSheet(
 
                     Spacer(modifier = Modifier.height(14.dp))
 
-                    // Clean Verse Preview Box with true geometric circular Ayah end medallion
+                    // Dynamic Verse Preview Box reflecting exact chosen Script & Size in authentic RTL layout
+                    val previewArabicText = when (fontStyle) {
+                        ArabicFontStyle.UTHMANI -> "بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ"
+                        ArabicFontStyle.INDO_PAK -> "بِسْمِ اللهِ الرَّحْمٰنِ الرَّحِيْمِ"
+                    }
+
+                    val previewAnnotatedText: AnnotatedString = remember(previewArabicText) {
+                        buildAnnotatedString {
+                            append(previewArabicText)
+                            append(" ")
+                            appendInlineContent(id = "ayah_end", alternateText = "١")
+                        }
+                    }
+
+                    val previewMarkerColor = MaterialTheme.colorScheme.secondary
+                    val previewInlineContentMap = remember(currentDisplaySp, previewMarkerColor) {
+                        val markerSizeSp = (currentDisplaySp * 1.34f).sp
+                        mapOf(
+                            "ayah_end" to InlineTextContent(
+                                placeholder = Placeholder(
+                                    width = markerSizeSp,
+                                    height = markerSizeSp,
+                                    placeholderVerticalAlign = PlaceholderVerticalAlign.Center
+                                )
+                            ) { digits ->
+                                AyahEndMedallionSymbol(
+                                    arabicDigits = digits,
+                                    markerColor = previewMarkerColor,
+                                    fontSizeSp = currentDisplaySp
+                                )
+                            }
+                        )
+                    }
+
                     val previewFontFamily = when (fontStyle) {
                         ArabicFontStyle.UTHMANI -> FontFamily.Serif
                         ArabicFontStyle.INDO_PAK -> FontFamily.Default
                     }
+                    val previewFontWeight = if (fontStyle == ArabicFontStyle.INDO_PAK) FontWeight.Medium else FontWeight.Normal
+                    val previewLineHeight = if (fontStyle == ArabicFontStyle.INDO_PAK) (currentDisplaySp * 2.05).sp else (currentDisplaySp * 1.9).sp
+                    val previewLetterSpacing = if (fontStyle == ArabicFontStyle.INDO_PAK) 0.4.sp else 0.sp
 
                     Surface(
                         shape = RoundedCornerShape(16.dp),
                         color = MaterialTheme.colorScheme.background,
-                        border = BorderStroke(0.8.dp, MaterialTheme.colorScheme.outlineVariant),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Row(
+                        Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 18.dp, vertical = 20.dp),
-                            horizontalArrangement = Arrangement.Center,
-                            verticalAlignment = Alignment.CenterVertically
+                                .padding(horizontal = 20.dp, vertical = 18.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            AyahEndMedallionSymbol(
-                                arabicDigits = "١",
-                                markerColor = MaterialTheme.colorScheme.secondary,
-                                fontSizeSp = fontSizeSp
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Text(
+                                    text = "Surah Al-Fatihah • Ayah 1",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                                    color = MaterialTheme.colorScheme.secondary
+                                )
+                                Text(
+                                    text = "• ${if (fontStyle == ArabicFontStyle.UTHMANI) "Uthmani" else "Indo-Pak"}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+
                             Text(
-                                text = "بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ",
-                                style = MaterialTheme.typography.headlineSmall.copy(
+                                text = previewAnnotatedText,
+                                inlineContent = previewInlineContentMap,
+                                style = TextStyle(
+                                    fontSize = currentDisplaySp.sp,
+                                    lineHeight = previewLineHeight,
+                                    letterSpacing = previewLetterSpacing,
                                     fontFamily = previewFontFamily,
-                                    fontWeight = if (fontStyle == ArabicFontStyle.INDO_PAK) FontWeight.Bold else FontWeight.Normal,
-                                    fontSize = fontSizeSp.sp,
-                                    lineHeight = (fontSizeSp * 1.8f).sp
+                                    fontWeight = previewFontWeight,
+                                    textAlign = TextAlign.Center,
+                                    textDirection = TextDirection.Rtl
                                 ),
                                 color = MaterialTheme.colorScheme.onSurface,
-                                textAlign = TextAlign.Center
+                                modifier = Modifier.fillMaxWidth()
+                            )
+
+                            Text(
+                                text = "In the name of Allah, the Entirely Merciful, the Especially Merciful.",
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    fontStyle = FontStyle.Italic,
+                                    lineHeight = 18.sp
+                                ),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth()
                             )
                         }
                     }
