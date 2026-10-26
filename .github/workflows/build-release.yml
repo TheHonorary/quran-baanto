@@ -38,11 +38,9 @@ jobs:
         run: |
           if [ -n "${{ secrets.ENV_FILE_CONTENT }}" ]; then
             echo "${{ secrets.ENV_FILE_CONTENT }}" > .env
-          elif [ ! -f .env ]; then
-            cp .env.example .env || touch .env
           fi
 
-          # Inject individual secrets from GitHub Secrets if defined
+          # Override individual secrets from GitHub Secrets if defined
           if [ -n "${{ secrets.FIREBASE_PROJECT_ID }}" ]; then
             sed -i '/FIREBASE_PROJECT_ID=/d' .env
             echo "FIREBASE_PROJECT_ID=${{ secrets.FIREBASE_PROJECT_ID }}" >> .env
@@ -76,10 +74,7 @@ jobs:
         run: |
           if [ -n "${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}" ]; then
             echo "${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}" | base64 --decode > app/google-services.json
-            echo "Successfully decoded google-services.json from GitHub Secrets"
-          elif [ -f app/google-services.json.example ]; then
-            cp app/google-services.json.example app/google-services.json
-            echo "Using placeholder app/google-services.json.example for release build"
+            echo "Successfully updated google-services.json from GitHub Secrets"
           fi
 
       - name: Set up Release Signing Key

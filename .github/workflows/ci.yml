@@ -33,18 +33,6 @@ jobs:
           yes | "$SDKMANAGER" --licenses || true
           "$SDKMANAGER" "platform-tools" "platforms;android-36" "build-tools;36.0.0" || true
 
-      - name: Set up Environment Variables (.env)
-        run: |
-          if [ ! -f .env ]; then
-            cp .env.example .env || touch .env
-          fi
-
-      - name: Set up Google Services JSON for Firebase
-        run: |
-          if [ -f app/google-services.json.example ]; then
-            cp app/google-services.json.example app/google-services.json
-          fi
-
       - name: Make Gradle wrapper executable
         run: chmod +x ./gradlew
 

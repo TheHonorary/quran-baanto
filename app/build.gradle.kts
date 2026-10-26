@@ -1,12 +1,19 @@
 import com.google.gms.googleservices.GoogleServicesPlugin.MissingGoogleServicesStrategy
+import java.util.Properties
 
 plugins {
   alias(libs.plugins.android.application)
   alias(libs.plugins.kotlin.compose)
   alias(libs.plugins.google.devtools.ksp)
   // alias(libs.plugins.roborazzi)
-  alias(libs.plugins.secrets)
   alias(libs.plugins.google.services)
+}
+
+val envProps = Properties().apply {
+  val envFile = rootProject.file(".env")
+  if (envFile.exists()) {
+    envFile.inputStream().use { load(it) }
+  }
 }
 
 android {
@@ -22,8 +29,23 @@ android {
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-    manifestPlaceholders["ADMOB_APP_ID"] = project.findProperty("ADMOB_APP_ID")?.toString()
-      ?: "ca-app-pub-3940256099942544~3347511713"
+    val admobAppId = envProps.getProperty("ADMOB_APP_ID", "ca-app-pub-3940256099942544~3347511713")
+    val admobRewardedId = envProps.getProperty("ADMOB_REWARDED_AD_UNIT_ID", "ca-app-pub-3940256099942544/5224354917")
+    val firebaseProjectId = envProps.getProperty("FIREBASE_PROJECT_ID", "quran-baanto")
+    val firebaseProjectNumber = envProps.getProperty("FIREBASE_PROJECT_NUMBER", "895060640103")
+    val firebaseAppId = envProps.getProperty("FIREBASE_APP_ID", "1:895060640103:android:c4576140c2b29ffb662fc2")
+    val firebaseStorageBucket = envProps.getProperty("FIREBASE_STORAGE_BUCKET", "quran-baanto.firebasestorage.app")
+    val firebaseApiKey = envProps.getProperty("FIREBASE_API_KEY", "AIzaSyC6z77kNhAhRU8uw0RkNopdt5KWcH0smf8")
+
+    manifestPlaceholders["ADMOB_APP_ID"] = admobAppId
+
+    buildConfigField("String", "ADMOB_APP_ID", "\"$admobAppId\"")
+    buildConfigField("String", "ADMOB_REWARDED_AD_UNIT_ID", "\"$admobRewardedId\"")
+    buildConfigField("String", "FIREBASE_PROJECT_ID", "\"$firebaseProjectId\"")
+    buildConfigField("String", "FIREBASE_PROJECT_NUMBER", "\"$firebaseProjectNumber\"")
+    buildConfigField("String", "FIREBASE_APP_ID", "\"$firebaseAppId\"")
+    buildConfigField("String", "FIREBASE_STORAGE_BUCKET", "\"$firebaseStorageBucket\"")
+    buildConfigField("String", "FIREBASE_API_KEY", "\"$firebaseApiKey\"")
   }
 
   signingConfigs {
@@ -67,14 +89,6 @@ android {
     includeInApk = false
     includeInBundle = true
   }
-}
-
-// Configure the Secrets Gradle Plugin to use .env and .env.example files
-// to match the convention used in Web projects.
-secrets {
-  propertiesFileName = ".env"
-  defaultPropertiesFileName = ".env.example"
-  ignoreList.add("FIREBASE_APPCHECK_DEBUG_TOKEN")
 }
 
 googleServices { missingGoogleServicesStrategy = MissingGoogleServicesStrategy.WARN }
