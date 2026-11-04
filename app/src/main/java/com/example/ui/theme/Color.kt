@@ -80,3 +80,17 @@ val LocalBlueContainer = Color(0xFFDBEAFE)
 val LocalBlueOnContainer = Color(0xFF1E3A8A)
 val LocalBlueSurfaceLight = Color(0xFFF4F8FF)
 val LocalBlueSurfaceDark = Color(0xFF172030)
+
+// ============================================================================
+// SANCTUARY ILLUMINATED GLOW & ACCENT TOKENS
+// ============================================================================
+val SanctuaryEmeraldDark = Color(0xFF092019)
+val SanctuaryEmeraldMedium = Color(0xFF0F352A)
+val SanctuaryEmeraldLight = Color(0xFF1B5343)
+val SanctuaryGoldBright = Color(0xFFF7CF76)
+val SanctuaryGoldWarm = Color(0xFFDDA638)
+val SanctuaryGoldAmber = Color(0xFFBA7B1F)
+val SanctuaryGoldHalo = Color(0x33F7CF76)
+val SanctuaryEmeraldHalo = Color(0x261B5343)
+val SanctuaryParchmentWarm = Color(0xFFF9F6EE)
+

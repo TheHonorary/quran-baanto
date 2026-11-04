@@ -9,6 +9,9 @@ import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.ui.graphics.vector.ImageVector
 
+import androidx.compose.material.icons.filled.LocalFireDepartment
+import androidx.compose.material.icons.outlined.LocalFireDepartment
+
 sealed class BottomNavItem(
     val route: String,
     val title: String,
@@ -35,4 +38,12 @@ sealed class BottomNavItem(
         selectedIcon = Icons.Filled.Groups,
         unselectedIcon = Icons.Outlined.Groups
     )
+
+    object Streaks : BottomNavItem(
+        route = "streaks",
+        title = "Streaks",
+        selectedIcon = Icons.Filled.LocalFireDepartment,
+        unselectedIcon = Icons.Outlined.LocalFireDepartment
+    )
 }
+

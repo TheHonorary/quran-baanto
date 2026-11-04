@@ -171,7 +171,7 @@ fun SettingsSheet(
                     color = MaterialTheme.colorScheme.secondaryContainer
                 ) {
                     Text(
-                        text = "v3.0",
+                        text = "v4.0",
                         style = MaterialTheme.typography.labelSmall.copy(
                             fontWeight = FontWeight.Bold
                         ),
@@ -621,7 +621,7 @@ fun SettingsSheet(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
-                        text = "Quran Baanto • Version 3.0",
+                        text = "Quran Baanto • Version 4.0",
                         style = MaterialTheme.typography.titleSmall.copy(
                             fontWeight = FontWeight.Bold
                         ),

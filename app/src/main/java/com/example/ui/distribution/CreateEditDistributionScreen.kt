@@ -28,6 +28,13 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoFixHigh
 import androidx.compose.material.icons.filled.Check
@@ -126,6 +133,8 @@ fun CreateEditDistributionScreen(
     var hostClaimName by remember(savedProfileName) { mutableStateOf(savedProfileName) }
     var hostClaimCount by remember { mutableIntStateOf(1) }
     var hostClaimCountText by remember { mutableStateOf("1") }
+    var hostSelectedParas by remember { mutableStateOf<List<Int>>(listOf(1)) }
+    var showHostParaPickerDialog by remember { mutableStateOf(false) }
 
     var initializedForId by remember { mutableStateOf<Long?>(null) }
 
@@ -392,12 +401,14 @@ fun CreateEditDistributionScreen(
                                         } else {
                                             hostClaimCount.coerceIn(1, 30)
                                         }
+                                        val activeParas = if (isAmalMode) emptyList() else hostSelectedParas.ifEmpty { listOf(1) }
                                         listOf(
                                             ParticipantAllocation(
                                                 id = 0L,
                                                 name = hostClaimName.trim(),
-                                                count = c,
-                                                displayOrder = 1
+                                                count = if (isAmalMode) c else activeParas.size,
+                                                displayOrder = activeParas.firstOrNull() ?: 1,
+                                                specificParas = activeParas
                                             )
                                         )
                                     } else {
@@ -860,7 +871,10 @@ fun CreateEditDistributionScreen(
 
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .horizontalScroll(rememberScrollState())
                                     ) {
                                         Text(
                                             text = "Presets:",
@@ -1065,28 +1079,231 @@ fun CreateEditDistributionScreen(
                                         } else {
                                             Row(
                                                 verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .horizontalScroll(rememberScrollState())
                                             ) {
                                                 Text(
                                                     text = "Your Paras:",
                                                     style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
-                                                    color = MaterialTheme.colorScheme.onSurface
+                                                    color = MaterialTheme.colorScheme.onSurface,
+                                                    maxLines = 1,
+                                                    softWrap = false
                                                 )
-                                                listOf(1, 2, 3, 5).forEach { countPreset ->
-                                                    FilterChip(
-                                                        selected = hostClaimCount == countPreset,
-                                                        onClick = { hostClaimCount = countPreset },
-                                                        label = {
-                                                            Text(
-                                                                "$countPreset ${if (countPreset == 1) "Para" else "Paras"}",
-                                                                fontWeight = FontWeight.Bold
-                                                            )
-                                                        },
-                                                        colors = FilterChipDefaults.filterChipColors(
-                                                            selectedContainerColor = OnlineGoldAccent.copy(alpha = 0.2f),
-                                                            selectedLabelColor = OnlineGoldAccent
+
+                                                FilterChip(
+                                                    selected = hostClaimCount == 1,
+                                                    onClick = { hostClaimCount = 1 },
+                                                    label = {
+                                                        Text(
+                                                            "1 Para",
+                                                            fontWeight = FontWeight.Bold,
+                                                            maxLines = 1,
+                                                            softWrap = false
                                                         )
+                                                    },
+                                                    colors = FilterChipDefaults.filterChipColors(
+                                                        selectedContainerColor = OnlineGoldAccent.copy(alpha = 0.2f),
+                                                        selectedLabelColor = OnlineGoldAccent
                                                     )
+                                                )
+
+                                                FilterChip(
+                                                    selected = hostClaimCount == 2,
+                                                    onClick = {
+                                                        hostClaimCount = 2
+                                                        hostSelectedParas = listOf(1, 2)
+                                                    },
+                                                    label = {
+                                                        Text(
+                                                            "2 Paras",
+                                                            fontWeight = FontWeight.Bold,
+                                                            maxLines = 1,
+                                                            softWrap = false
+                                                        )
+                                                    },
+                                                    colors = FilterChipDefaults.filterChipColors(
+                                                        selectedContainerColor = OnlineGoldAccent.copy(alpha = 0.2f),
+                                                        selectedLabelColor = OnlineGoldAccent
+                                                    )
+                                                )
+
+                                                val isCustomSelected = hostClaimCount >= 3 || (hostSelectedParas.isNotEmpty() && hostSelectedParas != listOf(1) && hostSelectedParas != listOf(1, 2))
+                                                FilterChip(
+                                                    selected = isCustomSelected,
+                                                    onClick = { showHostParaPickerDialog = true },
+                                                    leadingIcon = {
+                                                        Icon(
+                                                            imageVector = Icons.Default.Add,
+                                                            contentDescription = "Select specific Paras",
+                                                            modifier = Modifier.size(16.dp)
+                                                        )
+                                                    },
+                                                    label = {
+                                                        Text(
+                                                            text = if (hostSelectedParas.size == 1 && hostSelectedParas.first() != 1) "Para ${hostSelectedParas.first()}"
+                                                                else if (isCustomSelected) "${hostSelectedParas.size} Paras" else "Pick Para",
+                                                            fontWeight = FontWeight.Bold,
+                                                            maxLines = 1,
+                                                            softWrap = false
+                                                        )
+                                                    },
+                                                    colors = FilterChipDefaults.filterChipColors(
+                                                        selectedContainerColor = OnlineGoldAccent.copy(alpha = 0.2f),
+                                                        selectedLabelColor = OnlineGoldAccent
+                                                    )
+                                                )
+                                            }
+
+                                            if (showHostParaPickerDialog) {
+                                                var dialogSelectedParas by remember(hostSelectedParas) {
+                                                    mutableStateOf(hostSelectedParas.ifEmpty { listOf(1) }.toSet())
+                                                }
+
+                                                Dialog(
+                                                    onDismissRequest = { showHostParaPickerDialog = false },
+                                                    properties = DialogProperties(usePlatformDefaultWidth = false)
+                                                ) {
+                                                    Surface(
+                                                        shape = RoundedCornerShape(24.dp),
+                                                        color = MaterialTheme.colorScheme.background,
+                                                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                                                        tonalElevation = 8.dp,
+                                                        modifier = Modifier
+                                                            .fillMaxWidth()
+                                                            .padding(horizontal = 18.dp, vertical = 20.dp)
+                                                            .widthIn(max = 500.dp)
+                                                    ) {
+                                                        Column(
+                                                            modifier = Modifier
+                                                                .fillMaxWidth()
+                                                                .verticalScroll(rememberScrollState())
+                                                                .padding(22.dp),
+                                                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                                                         ) {
+                                                            Row(
+                                                                modifier = Modifier.fillMaxWidth(),
+                                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                                verticalAlignment = Alignment.CenterVertically
+                                                            ) {
+                                                                Column(modifier = Modifier.weight(1f)) {
+                                                                    Text(
+                                                                        text = "Select Your Paras",
+                                                                        style = MaterialTheme.typography.titleLarge.copy(
+                                                                            fontWeight = FontWeight.Bold,
+                                                                            fontSize = 20.sp
+                                                                        ),
+                                                                        color = MaterialTheme.colorScheme.onSurface
+                                                                    )
+                                                                    Spacer(modifier = Modifier.height(2.dp))
+                                                                    Text(
+                                                                        text = "Pick the exact Para(s) you wish to recite",
+                                                                        style = MaterialTheme.typography.bodySmall,
+                                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                                    )
+                                                                }
+
+                                                                Surface(
+                                                                    onClick = { showHostParaPickerDialog = false },
+                                                                    shape = RoundedCornerShape(10.dp),
+                                                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+                                                                    modifier = Modifier.size(36.dp)
+                                                                ) {
+                                                                    Box(contentAlignment = Alignment.Center) {
+                                                                        Icon(
+                                                                            imageVector = Icons.Default.Close,
+                                                                            contentDescription = "Close",
+                                                                            tint = MaterialTheme.colorScheme.onSurface,
+                                                                            modifier = Modifier.size(18.dp)
+                                                                        )
+                                                                    }
+                                                                }
+                                                            }
+
+                                                            // Status Banner
+                                                            Surface(
+                                                                shape = RoundedCornerShape(14.dp),
+                                                                color = OnlineGoldAccent.copy(alpha = 0.12f),
+                                                                border = BorderStroke(1.dp, OnlineGoldAccent.copy(alpha = 0.35f)),
+                                                                modifier = Modifier.fillMaxWidth()
+                                                            ) {
+                                                                Row(
+                                                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                                                                    verticalAlignment = Alignment.CenterVertically,
+                                                                    horizontalArrangement = Arrangement.SpaceBetween
+                                                                ) {
+                                                                    Text(
+                                                                        text = "Selected Share:",
+                                                                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                                                                        color = MaterialTheme.colorScheme.onSurface
+                                                                    )
+                                                                    Text(
+                                                                        text = if (dialogSelectedParas.size == 1) "Para ${dialogSelectedParas.first()}" else "${dialogSelectedParas.size} Paras (${dialogSelectedParas.sorted().joinToString(", ")})",
+                                                                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                                                        color = OnlineGoldAccent
+                                                                    )
+                                                                }
+                                                            }
+
+                                                            // 30-Para Selection Grid Table
+                                                            FlowRow(
+                                                                modifier = Modifier.fillMaxWidth(),
+                                                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                                                            ) {
+                                                                for (para in 1..30) {
+                                                                    val isSelected = para in dialogSelectedParas
+
+                                                                    Surface(
+                                                                        onClick = {
+                                                                            dialogSelectedParas = if (isSelected) {
+                                                                                if (dialogSelectedParas.size > 1) dialogSelectedParas - para else dialogSelectedParas
+                                                                            } else {
+                                                                                dialogSelectedParas + para
+                                                                            }
+                                                                        },
+                                                                        shape = RoundedCornerShape(10.dp),
+                                                                        color = if (isSelected) OnlineGoldAccent else MaterialTheme.colorScheme.surface,
+                                                                        border = BorderStroke(
+                                                                            width = 1.dp,
+                                                                            color = if (isSelected) OnlineGoldAccent else MaterialTheme.colorScheme.outlineVariant
+                                                                        ),
+                                                                        modifier = Modifier.size(44.dp)
+                                                                    ) {
+                                                                        Box(contentAlignment = Alignment.Center) {
+                                                                            Text(
+                                                                                text = "$para",
+                                                                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                                                                color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface
+                                                                            )
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+
+                                                            Row(
+                                                                modifier = Modifier.fillMaxWidth(),
+                                                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                                            ) {
+                                                                SecondaryEditorialButton(
+                                                                    text = "Cancel",
+                                                                    onClick = { showHostParaPickerDialog = false },
+                                                                    modifier = Modifier.weight(1f)
+                                                                )
+                                                                PrimarySanctuaryButton(
+                                                                    text = "Confirm (${dialogSelectedParas.size})",
+                                                                    icon = Icons.Default.Check,
+                                                                    onClick = {
+                                                                        hostSelectedParas = dialogSelectedParas.toList().sorted()
+                                                                        hostClaimCount = hostSelectedParas.size.coerceIn(1, 30)
+                                                                        showHostParaPickerDialog = false
+                                                                    },
+                                                                    modifier = Modifier.weight(1f)
+                                                                )
+                                                            }
+                                                        }
+                                                    }
                                                 }
                                             }
                                         }

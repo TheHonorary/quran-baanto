@@ -42,6 +42,8 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Diversity1
 import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.FitnessCenter
+import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.QrCode2
@@ -83,9 +85,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.material3.LinearProgressIndicator
 import com.example.data.db.DistributionEntity
 import com.example.data.db.DistributionType
+import com.example.data.db.ParticipantEntity
 import com.example.data.db.RoomMode
+import com.example.ui.components.ChiseledSanctuaryButton
+import com.example.ui.components.CircularProgressArc
 import com.example.ui.components.ManuscriptOrnamentDivider
 import com.example.ui.components.PeacefulEmptyState
 import com.example.ui.components.PrimarySanctuaryButton
@@ -102,6 +108,10 @@ import com.example.ui.theme.OnlineGoldAccent
 import com.example.ui.theme.OnlineGoldGlow
 import com.example.ui.theme.OnlineGoldSurfaceDark
 import com.example.ui.theme.OnlineGoldSurfaceLight
+import com.example.ui.theme.SanctuaryEmeraldDark
+import com.example.ui.theme.SanctuaryEmeraldMedium
+import com.example.ui.theme.SanctuaryGoldBright
+import com.example.ui.theme.SanctuaryGoldWarm
 import com.example.ui.viewmodel.DistributionViewModel
 import com.example.util.KhatmNotificationHelper
 import com.example.util.ServerSupportAdManager
@@ -154,6 +164,7 @@ fun DistributionListScreen(
     var activeShareDistribution by remember { mutableStateOf<DistributionEntity?>(null) }
     var qrCodeDistribution by remember { mutableStateOf<DistributionEntity?>(null) }
     var distributionPendingDelete by remember { mutableStateOf<DistributionEntity?>(null) }
+    var adminDistributionId by remember { mutableStateOf<Long?>(null) }
 
     val currentYear = remember { Calendar.getInstance().get(Calendar.YEAR) }
     val currentMonth = remember { Calendar.getInstance().get(Calendar.MONTH) + 1 }
@@ -181,74 +192,72 @@ fun DistributionListScreen(
         topBar = {
             SanctuaryTopHeader(
                 title = "Distributions",
-                leadingStaticGlyph = true,
-                isQuranGlyph = false,
+                customLeadingIcon = Icons.Filled.Groups,
                 actions = {
-                    // Only the refined Join Room button in the top header
-                    Surface(
-                        onClick = { showJoinRoomDialog = true },
-                        shape = RoundedCornerShape(14.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f),
-                        border = BorderStroke(0.9.dp, MaterialTheme.colorScheme.outlineVariant),
-                        modifier = Modifier.testTag("top_join_room_button")
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        Surface(
+                            onClick = { showTypePicker = true },
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)),
+                            modifier = Modifier.testTag("top_new_session_button")
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(24.dp)
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)),
-                                contentAlignment = Alignment.Center
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(5.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Add,
+                                    contentDescription = "New Session",
+                                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                                Text(
+                                    text = "New Session",
+                                    style = MaterialTheme.typography.labelMedium.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 11.5.sp
+                                    ),
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                            }
+                        }
+
+                        Surface(
+                            onClick = { showJoinRoomDialog = true },
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+                            border = BorderStroke(0.9.dp, MaterialTheme.colorScheme.outlineVariant),
+                            modifier = Modifier.testTag("top_join_room_button")
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(5.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Key,
                                     contentDescription = "Join Online Room",
                                     tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(13.dp)
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Text(
+                                    text = "Join",
+                                    style = MaterialTheme.typography.labelMedium.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 11.5.sp
+                                    ),
+                                    color = MaterialTheme.colorScheme.onSurface
                                 )
                             }
-                            Text(
-                                text = "Join Room",
-                                style = MaterialTheme.typography.labelMedium.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 12.sp
-                                ),
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
                         }
                     }
                 }
             )
-        },
-        floatingActionButton = {
-            if (distributions.isNotEmpty()) {
-                ExtendedFloatingActionButton(
-                    onClick = { showTypePicker = true },
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary,
-                    shape = RoundedCornerShape(16.dp),
-                    icon = {
-                        Icon(
-                            imageVector = Icons.Default.Add,
-                            contentDescription = null,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    },
-                    text = {
-                        Text(
-                            text = "New Session",
-                            style = MaterialTheme.typography.labelLarge.copy(
-                                fontWeight = FontWeight.Bold
-                            )
-                        )
-                    },
-                    modifier = Modifier.testTag("fab_new_distribution")
-                )
-            }
         },
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         containerColor = MaterialTheme.colorScheme.background,
@@ -311,6 +320,141 @@ fun DistributionListScreen(
                                     .weight(1f)
                                     .testTag("filter_amal")
                             )
+                        }
+                    }
+                }
+
+                // 2. Collective Progress Orbit (shows aggregated completion across circles)
+                if (distributions.isNotEmpty()) {
+                    val totalPortions = distributions.sumOf { it.totalTarget }
+                    val completedPortions = distributions.sumOf { dist ->
+                        val pList = participantsByDistribution[dist.id].orEmpty()
+                        if (dist.type == DistributionType.KHATM) {
+                            pList.count { it.isCompletedForMonth(currentYear, currentMonth) }
+                        } else {
+                            pList.count { it.isCompleted }
+                        }
+                    }
+                    val orbitProgress = if (totalPortions > 0) (completedPortions.toFloat() / totalPortions).coerceIn(0f, 1f) else 0f
+                    val orbitPct = (orbitProgress * 100).toInt()
+
+                    item(key = "collective_progress_orbit") {
+                        Surface(
+                            shape = RoundedCornerShape(22.dp),
+                            color = SanctuaryEmeraldDark,
+                            border = BorderStroke(1.4.dp, SanctuaryGoldWarm.copy(alpha = 0.85f)),
+                            shadowElevation = 4.dp,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("collective_progress_orbit_card")
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(
+                                        Brush.radialGradient(
+                                            colors = listOf(
+                                                SanctuaryGoldWarm.copy(alpha = 0.16f),
+                                                Color.Transparent
+                                            ),
+                                            radius = 450f
+                                        )
+                                    )
+                                    .padding(20.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(18.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier.size(76.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        CircularProgressArc(
+                                            progress = orbitProgress,
+                                            strokeWidth = 9.dp,
+                                            progressColor = SanctuaryGoldBright,
+                                            trackColor = SanctuaryEmeraldMedium.copy(alpha = 0.35f),
+                                            modifier = Modifier.size(76.dp)
+                                        )
+                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                            Text(
+                                                text = "$orbitPct%",
+                                                style = MaterialTheme.typography.titleMedium.copy(
+                                                    fontWeight = FontWeight.ExtraBold,
+                                                    color = SanctuaryGoldBright,
+                                                    fontSize = 16.sp
+                                                )
+                                            )
+                                            Text(
+                                                text = "COMPLETED",
+                                                style = MaterialTheme.typography.labelSmall.copy(
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = Color.White.copy(alpha = 0.7f),
+                                                    fontSize = 7.5.sp,
+                                                    letterSpacing = 0.5.sp
+                                                )
+                                            )
+                                        }
+                                    }
+
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            Text(
+                                                text = "COLLECTIVE ORBIT",
+                                                style = MaterialTheme.typography.labelSmall.copy(
+                                                    fontWeight = FontWeight.Bold,
+                                                    letterSpacing = 1.1.sp,
+                                                    fontSize = 10.sp
+                                                ),
+                                                color = SanctuaryGoldBright
+                                            )
+                                            Surface(
+                                                shape = RoundedCornerShape(4.dp),
+                                                color = SanctuaryGoldWarm.copy(alpha = 0.25f)
+                                            ) {
+                                                Text(
+                                                    text = "${distributions.size} Circles",
+                                                    style = MaterialTheme.typography.labelSmall.copy(
+                                                        fontWeight = FontWeight.Bold,
+                                                        fontSize = 9.sp
+                                                    ),
+                                                    color = SanctuaryGoldBright,
+                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                )
+                                            }
+                                        }
+
+                                        Spacer(modifier = Modifier.height(4.dp))
+
+                                        Text(
+                                            text = "$completedPortions of $totalPortions portions recited",
+                                            style = MaterialTheme.typography.titleSmall.copy(
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color.White,
+                                                fontSize = 15.sp
+                                            )
+                                        )
+
+                                        Spacer(modifier = Modifier.height(2.dp))
+
+                                        Text(
+                                            text = if (orbitProgress >= 1f) "All shared Khatms completed! BarakAllahu feekum."
+                                            else "Every recited ayah joins the shared tapestry of remembrance.",
+                                            style = MaterialTheme.typography.bodySmall.copy(
+                                                color = Color.White.copy(alpha = 0.75f),
+                                                fontSize = 11.5.sp
+                                            ),
+                                            maxLines = 2,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -454,32 +598,77 @@ fun DistributionListScreen(
                         }
                     }
 
-                    items(
-                        items = filteredDistributions,
-                        key = { it.id }
-                    ) { dist ->
-                        val distParticipants = participantsByDistribution[dist.id].orEmpty()
+                    item(key = "distributions_swipe_pager") {
+                        val pagerState = androidx.compose.foundation.pager.rememberPagerState(pageCount = { filteredDistributions.size })
 
-                        DistributionSpecimenCard(
-                            distribution = dist,
-                            onOpenClick = { onOpenDistributionDetail(dist.id) },
-                            onDeleteClick = { distributionPendingDelete = dist },
-                            onShowQrClick = if (dist.isOnline && !dist.roomPasscode.isNullOrBlank()) {
-                                { qrCodeDistribution = dist }
-                            } else null,
-                            onShareClick = {
-                                val summary = distributionViewModel.generateShareSummaryForDistribution(
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp),
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            androidx.compose.foundation.pager.HorizontalPager(
+                                state = pagerState,
+                                contentPadding = PaddingValues(end = if (filteredDistributions.size > 1) 32.dp else 0.dp),
+                                pageSpacing = 16.dp,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(440.dp)
+                            ) { page ->
+                                val dist = filteredDistributions[page]
+                                val distParticipants = participantsByDistribution[dist.id].orEmpty()
+
+                                DistributionCompressedSwipeCard(
                                     distribution = dist,
                                     participants = distParticipants,
-                                    targetYear = currentYear,
-                                    targetMonth = currentMonth
+                                    userProfileName = userProfileName,
+                                    currentYear = currentYear,
+                                    currentMonth = currentMonth,
+                                    onClick = { onOpenDistributionDetail(dist.id) },
+                                    onDeleteClick = { distributionPendingDelete = dist },
+                                    onShareClick = {
+                                        val summary = distributionViewModel.generateShareSummaryForDistribution(
+                                            distribution = dist,
+                                            participants = distParticipants,
+                                            targetYear = currentYear,
+                                            targetMonth = currentMonth
+                                        )
+                                        if (summary.isNotBlank()) {
+                                            activeShareDistribution = dist
+                                            activeShareSummaryText = summary
+                                        }
+                                    },
+                                    onShowQrClick = if (dist.isOnline && !dist.roomPasscode.isNullOrBlank()) {
+                                        { qrCodeDistribution = dist }
+                                    } else null,
+                                    onOpenAdmin = { adminDistributionId = dist.id },
+                                    modifier = Modifier.fillMaxSize()
                                 )
-                                if (summary.isNotBlank()) {
-                                    activeShareDistribution = dist
-                                    activeShareSummaryText = summary
+                            }
+
+                            // Dot Page Indicator
+                            if (filteredDistributions.size > 1) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.Center,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    repeat(filteredDistributions.size) { iteration ->
+                                        val isSelected = pagerState.currentPage == iteration
+                                        Box(
+                                            modifier = Modifier
+                                                .padding(horizontal = 4.dp)
+                                                .size(if (isSelected) 10.dp else 6.dp)
+                                                .clip(CircleShape)
+                                                .background(
+                                                    if (isSelected) MaterialTheme.colorScheme.primary
+                                                    else MaterialTheme.colorScheme.outlineVariant
+                                                )
+                                        )
+                                    }
                                 }
                             }
-                        )
+                        }
                     }
 
                     item(key = "distributions_footer_ornament") {
@@ -630,6 +819,19 @@ fun DistributionListScreen(
             }
         )
     }
+
+    adminDistributionId?.let { adminId ->
+        Dialog(
+            onDismissRequest = { adminDistributionId = null },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            DistributionAdminScreen(
+                distributionId = adminId,
+                distributionViewModel = distributionViewModel,
+                onBack = { adminDistributionId = null }
+            )
+        }
+    }
 }
 
 @Composable
@@ -681,7 +883,8 @@ private fun JoinOnlineRoomDialog(
     var userNameText by remember(initialUserName) { mutableStateOf(initialUserName) }
     var hasAttemptedJoin by remember { mutableStateOf(false) }
 
-    val isPasscodeError = hasAttemptedJoin && passcodeText.trim().length < 4
+    val isCirclePasscode = passcodeText.trim().uppercase().startsWith("CRCL-") || passcodeText.trim().uppercase().startsWith("STRK-")
+    val isPasscodeError = (hasAttemptedJoin && passcodeText.trim().length < 4) || isCirclePasscode
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -773,7 +976,13 @@ private fun JoinOnlineRoomDialog(
                         placeholder = { Text("e.g. QBO-7K4M (Compulsory)") },
                         isError = isPasscodeError,
                         supportingText = {
-                            if (isPasscodeError) {
+                            if (isCirclePasscode) {
+                                Text(
+                                    text = "This passcode belongs to a Streak Circle. Please go to the Streaks & Plans tab to join.",
+                                    color = MaterialTheme.colorScheme.error,
+                                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold)
+                                )
+                            } else if (isPasscodeError) {
                                 Text(
                                     text = "Room Passcode is compulsory to join (e.g. QBO-7K4M)",
                                     color = MaterialTheme.colorScheme.error,
@@ -781,7 +990,7 @@ private fun JoinOnlineRoomDialog(
                                 )
                             } else {
                                 Text(
-                                    text = "Compulsory * • Enter the passcode shared by the room host",
+                                    text = "Enter the Khatm passcode shared by the room host",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -853,7 +1062,13 @@ private fun JoinOnlineRoomDialog(
                         text = "Join Room",
                         icon = Icons.AutoMirrored.Filled.ArrowForward,
                         onClick = {
-                            if (passcodeText.trim().length < 4) {
+                            if (isCirclePasscode) {
+                                Toast.makeText(
+                                    context,
+                                    "This code is for a Streak Circle. Please go to the Streaks & Plans tab to join.",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                            } else if (passcodeText.trim().length < 4) {
                                 hasAttemptedJoin = true
                                 Toast.makeText(
                                     context,
@@ -1458,10 +1673,257 @@ private fun ModeSpecimenOptionCard(
 }
 
 /**
- * Visually distinctive session summary card that clearly differentiates:
- * - ONLINE ROOMS -> Luminous GOLD GLOW (OnlineGoldGlow / OnlineGoldAccent)
- * - LOCAL ROOMS  -> Luminous BLUE GLOW (LocalBlueGlow / LocalBlueAccent)
+ * Large "compressed look" swipe card for existing distributions,
+ * matching the user's hand-drawn reference sketch (Image 1).
  */
+@Composable
+private fun DistributionCompressedSwipeCard(
+    distribution: DistributionEntity,
+    participants: List<ParticipantEntity>,
+    userProfileName: String,
+    currentYear: Int,
+    currentMonth: Int,
+    onClick: () -> Unit,
+    onDeleteClick: () -> Unit,
+    onShareClick: () -> Unit,
+    onShowQrClick: (() -> Unit)? = null,
+    onOpenAdmin: (() -> Unit)? = null,
+    modifier: Modifier = Modifier
+) {
+    val isOnline = distribution.isOnline
+    val isDark = isSystemInDarkTheme()
+    val glowColor = if (isOnline) OnlineGoldGlow else LocalBlueGlow
+    val accentColor = if (isOnline) OnlineGoldAccent else LocalBlueAccent
+    val glowSurfaceTint = if (isOnline) {
+        if (isDark) OnlineGoldSurfaceDark else OnlineGoldSurfaceLight
+    } else {
+        if (isDark) LocalBlueSurfaceDark else LocalBlueSurfaceLight
+    }
+
+    val isHost = !isOnline || distribution.roomPasscode != null ||
+        participants.any { userProfileName.isNotBlank() && (it.name.equals(userProfileName, ignoreCase = true) || it.addedByProfileName.equals(userProfileName, ignoreCase = true)) }
+
+    val memberCount = participants.size
+    val userPart = participants.firstOrNull {
+        (userProfileName.isNotBlank() && (it.name.equals(userProfileName, ignoreCase = true) || it.addedByProfileName.equals(userProfileName, ignoreCase = true))) ||
+        it.isPinned
+    }
+
+    val yourParaLabel = when {
+        distribution.type == DistributionType.ONE_TIME_KHATM -> {
+            if (userPart?.specificParaNumber != null) "Para ${userPart.specificParaNumber}"
+            else if (userPart != null) "Claimed"
+            else "Not Claimed"
+        }
+        distribution.type == DistributionType.KHATM -> {
+            if (userPart != null) "${userPart.allocatedCount} Para(s)"
+            else "Not Joined"
+        }
+        else -> {
+            if (userPart != null) "${userPart.completedCount}/${userPart.allocatedCount} Recited"
+            else "Not Joined"
+        }
+    }
+
+    val completedCount = if (distribution.type == DistributionType.KHATM) {
+        participants.count { it.isCompletedForMonth(currentYear, currentMonth) }
+    } else {
+        participants.count { it.isCompleted }
+    }
+    val progress = if (distribution.totalTarget > 0) (completedCount.toFloat() / distribution.totalTarget).coerceIn(0f, 1f) else 0f
+
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(28.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(2.dp, accentColor),
+        tonalElevation = 6.dp,
+        shadowElevation = 14.dp,
+        modifier = modifier
+            .fillMaxWidth()
+            .shadow(
+                elevation = 16.dp,
+                shape = RoundedCornerShape(28.dp),
+                ambientColor = glowColor,
+                spotColor = glowColor
+            )
+            .testTag("distribution_compressed_card_${distribution.id}")
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            glowSurfaceTint.copy(alpha = if (isDark) 0.55f else 0.75f),
+                            MaterialTheme.colorScheme.surface
+                        )
+                    )
+                )
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(22.dp),
+                verticalArrangement = Arrangement.SpaceBetween
+            ) {
+                // Top: Title, Mode Pill, and Share
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = distribution.name,
+                            style = MaterialTheme.typography.titleLarge.copy(
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 22.sp,
+                                letterSpacing = 0.3.sp
+                            ),
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = when (distribution.type) {
+                                DistributionType.KHATM -> "Monthly Rotating Khatm"
+                                DistributionType.ONE_TIME_KHATM -> "One-Time 30-Para Khatm"
+                                DistributionType.AMAL -> "Custom Target Amal"
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    // Mode Pill
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = accentColor.copy(alpha = 0.16f),
+                        border = BorderStroke(1.dp, accentColor.copy(alpha = 0.55f))
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .clip(CircleShape)
+                                    .background(accentColor)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = if (isOnline) "Cloud • ${distribution.roomPasscode.orEmpty()}" else "Local",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 11.sp
+                                ),
+                                color = accentColor
+                            )
+                        }
+                    }
+                }
+
+                // Center: Big "16 Members" as drawn by user
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        text = "$memberCount",
+                        style = MaterialTheme.typography.displayMedium.copy(
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 54.sp
+                        ),
+                        color = MaterialTheme.colorScheme.onSurface,
+                        textAlign = TextAlign.Center
+                    )
+                    Text(
+                        text = if (memberCount == 1) "Member" else "Members",
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 0.5.sp
+                        ),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    LinearProgressIndicator(
+                        progress = { progress },
+                        modifier = Modifier
+                            .fillMaxWidth(0.85f)
+                            .height(8.dp)
+                            .clip(CircleShape),
+                        color = accentColor,
+                        trackColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "$completedCount of ${distribution.totalTarget} portions completed (${(progress * 100).toInt()}%)",
+                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                // Bottom Row: "Your Para:" on left, "Admin Powers" badge on right (as sketched in Image 1)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Bottom
+                ) {
+                    Column {
+                        Text(
+                            text = "Your Para:",
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = yourParaLabel,
+                            style = MaterialTheme.typography.titleLarge.copy(
+                                fontWeight = FontWeight.ExtraBold,
+                                color = accentColor
+                            )
+                        )
+                    }
+
+                    if (isHost && onOpenAdmin != null) {
+                        Surface(
+                            onClick = onOpenAdmin,
+                            shape = RoundedCornerShape(12.dp),
+                            color = accentColor.copy(alpha = 0.18f),
+                            border = BorderStroke(1.2.dp, accentColor.copy(alpha = 0.6f)),
+                            modifier = Modifier.testTag("admin_powers_button_${distribution.id}")
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                            ) {
+                                Text(
+                                    text = "💪",
+                                    fontSize = 18.sp
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "Admin Powers",
+                                    style = MaterialTheme.typography.labelMedium.copy(
+                                        fontWeight = FontWeight.Bold
+                                    ),
+                                    color = accentColor
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun DistributionSpecimenCard(
     distribution: DistributionEntity,

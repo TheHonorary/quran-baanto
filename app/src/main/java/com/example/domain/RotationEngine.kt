@@ -8,7 +8,8 @@ data class ParticipantAllocation(
     val name: String,
     val count: Int,
     val displayOrder: Int,
-    val uid: String = java.util.UUID.randomUUID().toString()
+    val uid: String = java.util.UUID.randomUUID().toString(),
+    val specificParas: List<Int> = emptyList()
 )
 
 /**

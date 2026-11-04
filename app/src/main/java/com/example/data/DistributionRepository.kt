@@ -105,23 +105,34 @@ class DistributionRepository(private val dao: DistributionDao) {
 
             val validAllocations = allocations.filter { it.name.isNotBlank() && it.count > 0 }
             val participants = if (type == DistributionType.ONE_TIME_KHATM) {
-                // In One-Time Khatm, each initial allocation claims sequential Paras 1..N
-                var nextPara = 1
                 val list = mutableListOf<ParticipantEntity>()
+                val takenParas = validAllocations.flatMap { it.specificParas }.toMutableSet()
+                var fallbackPara = 1
                 for (alloc in validAllocations) {
-                    repeat(alloc.count) {
-                        if (nextPara <= 30) {
-                            list.add(
-                                ParticipantEntity(
-                                    distributionId = 0,
-                                    name = alloc.name.trim(),
-                                    allocatedCount = 1,
-                                    displayOrder = nextPara,
-                                    specificParaNumber = nextPara
-                                )
-                            )
-                            nextPara++
+                    val assignedForThisPerson = if (alloc.specificParas.isNotEmpty()) {
+                        alloc.specificParas
+                    } else {
+                        val needed = alloc.count
+                        val assigned = mutableListOf<Int>()
+                        while (assigned.size < needed && fallbackPara <= 30) {
+                            if (fallbackPara !in takenParas) {
+                                assigned.add(fallbackPara)
+                                takenParas.add(fallbackPara)
+                            }
+                            fallbackPara++
                         }
+                        assigned
+                    }
+                    for (para in assignedForThisPerson) {
+                        list.add(
+                            ParticipantEntity(
+                                distributionId = 0,
+                                name = alloc.name.trim(),
+                                allocatedCount = 1,
+                                displayOrder = para,
+                                specificParaNumber = para
+                            )
+                        )
                     }
                 }
                 list
@@ -131,7 +142,8 @@ class DistributionRepository(private val dao: DistributionDao) {
                         distributionId = 0,
                         name = alloc.name.trim(),
                         allocatedCount = alloc.count,
-                        displayOrder = index + 1
+                        displayOrder = index + 1,
+                        specificParaNumber = alloc.specificParas.firstOrNull()
                     )
                 }
             }

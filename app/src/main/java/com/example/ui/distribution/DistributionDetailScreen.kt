@@ -140,6 +140,7 @@ fun DistributionDetailScreen(
     var showJoinSlotDialog by remember { mutableStateOf(false) }
     var showReopenAmalDialog by remember { mutableStateOf(false) }
     var oneTimeParaFilter by remember { mutableStateOf(OneTimeParaFilter.ALL) }
+    var memberToKick by remember { mutableStateOf<Pair<Long, String>?>(null) }
 
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
@@ -456,12 +457,12 @@ fun DistributionDetailScreen(
                             onToggleComplete = { participantId, label ->
                                 if (dist.isOnline) {
                                     ensureNotificationPermissionRequested()
-                                    distributionViewModel.toggleParticipantCompletion(
-                                        distributionId = dist.id,
-                                        participantId = participantId,
-                                        assignedParaLabel = label
-                                    )
                                 }
+                                distributionViewModel.toggleParticipantCompletion(
+                                    distributionId = dist.id,
+                                    participantId = participantId,
+                                    assignedParaLabel = label
+                                )
                             },
                             onUnpin = { participantId ->
                                 distributionViewModel.toggleParticipantPin(participantId)
@@ -498,17 +499,15 @@ fun DistributionDetailScreen(
 
                                 Text(
                                     text = when {
-                                        isAmal && dist.isOnline -> "Tap + to count or tick done"
-                                        isAmal -> "Tap + to count recitations"
-                                        dist.isOnline -> "Pin 📌 or tick done"
-                                        else -> "Pin 📌 or Jump to Para"
+                                        isAmal -> "Tap + to count or tick done"
+                                        else -> "Pin 📌, tick done, or jump to Para"
                                     },
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
 
-                            if (isOneTimeKhatm && dist.isOnline) {
+                            if (isOneTimeKhatm) {
                                 Spacer(modifier = Modifier.height(12.dp))
                                 Surface(
                                     shape = RoundedCornerShape(14.dp),
@@ -564,11 +563,12 @@ fun DistributionDetailScreen(
                             ) { index, assignment ->
                                 val partEntity = participantById[assignment.participantId]
                                 val isPinned = partEntity?.isPinned ?: false
+                                val isDone = partEntity?.isCompleted ?: false
 
                                 KhatmAssignmentSpecimenCard(
                                     isOnline = false,
                                     assignment = assignment,
-                                    isCompleted = false,
+                                    isCompleted = isDone,
                                     isGuest = false,
                                     isPinned = isPinned,
                                     accentColor = palette[index % palette.size],
@@ -578,7 +578,16 @@ fun DistributionDetailScreen(
                                     onOpenReader = {
                                         onOpenParaReader(assignment.startPara)
                                     },
-                                    onToggleComplete = {}
+                                    onToggleComplete = {
+                                        distributionViewModel.toggleParticipantCompletion(
+                                            distributionId = dist.id,
+                                            participantId = assignment.participantId,
+                                            assignedParaLabel = assignment.displayRangeText
+                                        )
+                                    },
+                                    onRemoveMember = {
+                                        memberToKick = assignment.participantId to assignment.participantName
+                                    }
                                 )
                             }
                         } else {
@@ -606,8 +615,10 @@ fun DistributionDetailScreen(
                                         showOneTimeClaimModal = true
                                     },
                                     onToggleComplete = {
-                                        if (claim != null && dist.isOnline) {
-                                            ensureNotificationPermissionRequested()
+                                        if (claim != null) {
+                                            if (dist.isOnline) {
+                                                ensureNotificationPermissionRequested()
+                                            }
                                             distributionViewModel.toggleParticipantCompletion(
                                                 distributionId = dist.id,
                                                 participantId = claim.id,
@@ -625,7 +636,10 @@ fun DistributionDetailScreen(
                                         if (claim != null) {
                                             distributionViewModel.removeParticipantClaim(claim.id)
                                         }
-                                    }
+                                    },
+                                    onRemoveMember = if (claim != null) {
+                                        { memberToKick = claim.id to claim.name }
+                                    } else null
                                 )
                             }
                         }
@@ -681,11 +695,14 @@ fun DistributionDetailScreen(
                                     onToggleComplete = {
                                         if (dist.isOnline) {
                                             ensureNotificationPermissionRequested()
-                                            distributionViewModel.toggleParticipantCompletion(
-                                                distributionId = dist.id,
-                                                participantId = participant.id
-                                            )
                                         }
+                                        distributionViewModel.toggleParticipantCompletion(
+                                            distributionId = dist.id,
+                                            participantId = participant.id
+                                        )
+                                    },
+                                    onRemoveMember = {
+                                        memberToKick = participant.id to participant.name
                                     }
                                 )
                             }
@@ -724,12 +741,10 @@ fun DistributionDetailScreen(
                                 key = { _, item -> "${item.startPara}_${item.participantId}" }
                             ) { index, assignment ->
                                 val partEntity = participantById[assignment.participantId]
-                                val isDone = if (dist.isOnline) {
-                                    partEntity?.isCompletedForMonth(
-                                        activeState.selectedYear,
-                                        activeState.selectedMonth
-                                    ) ?: false
-                                } else false
+                                val isDone = partEntity?.isCompletedForMonth(
+                                    activeState.selectedYear,
+                                    activeState.selectedMonth
+                                ) ?: false
                                 val isGuest = partEntity?.isGuestEntry ?: false
                                 val isPinned = partEntity?.isPinned ?: false
 
@@ -749,12 +764,15 @@ fun DistributionDetailScreen(
                                     onToggleComplete = {
                                         if (dist.isOnline) {
                                             ensureNotificationPermissionRequested()
-                                            distributionViewModel.toggleParticipantCompletion(
-                                                distributionId = dist.id,
-                                                participantId = assignment.participantId,
-                                                assignedParaLabel = assignment.displayRangeText
-                                            )
                                         }
+                                        distributionViewModel.toggleParticipantCompletion(
+                                            distributionId = dist.id,
+                                            participantId = assignment.participantId,
+                                            assignedParaLabel = assignment.displayRangeText
+                                        )
+                                    },
+                                    onRemoveMember = {
+                                        memberToKick = assignment.participantId to assignment.participantName
                                     }
                                 )
                             }
@@ -1062,6 +1080,42 @@ fun DistributionDetailScreen(
             }
         )
     }
+
+    if (memberToKick != null) {
+        val (partId, partName) = memberToKick!!
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { memberToKick = null },
+            title = {
+                Text(
+                    text = "Remove Member",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                )
+            },
+            text = {
+                Text(
+                    text = "Are you sure you want to remove \"$partName\" from this room? Their assigned Para / recitation slot will be released.",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        distributionViewModel.removeParticipantClaim(partId)
+                        memberToKick = null
+                        Toast.makeText(context, "Removed $partName", Toast.LENGTH_SHORT).show()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Remove", color = MaterialTheme.colorScheme.onError)
+                }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { memberToKick = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
 }
 
 @Composable
@@ -1355,10 +1409,8 @@ private fun PinnedMyParasSectionCard(
 
             if (isMonthlyKhatm) {
                 pinnedMonthlyAssignments.forEach { assignment ->
-                    val isDone = if (isOnline) {
-                        participantById[assignment.participantId]
-                            ?.isCompletedForMonth(selectedYear, selectedMonth) ?: false
-                    } else false
+                    val isDone = participantById[assignment.participantId]
+                        ?.isCompletedForMonth(selectedYear, selectedMonth) ?: false
                     PinnedRowItem(
                         isOnline = isOnline,
                         name = assignment.participantName,
@@ -1382,7 +1434,7 @@ private fun PinnedMyParasSectionCard(
                         rightValue = "$paraNum",
                         subtitle = "Para $paraNum",
                         jumpParaNumber = paraNum,
-                        isCompleted = if (isOnline) claim.isCompleted else false,
+                        isCompleted = claim.isCompleted,
                         onOpenReader = { onOpenParaReader(paraNum) },
                         onToggleComplete = { onToggleComplete(claim.id, "Para $paraNum") },
                         onUnpin = { onUnpin(claim.id) }
@@ -1396,7 +1448,7 @@ private fun PinnedMyParasSectionCard(
                         rightValue = "${part.completedCount}/${part.allocatedCount}",
                         subtitle = "${part.allocatedCount} Recitations",
                         jumpParaNumber = null,
-                        isCompleted = if (isOnline) part.isCompleted else false,
+                        isCompleted = part.isCompleted,
                         onOpenReader = null,
                         onToggleComplete = { onToggleComplete(part.id, null) },
                         onUnpin = { onUnpin(part.id) }
@@ -1420,6 +1472,8 @@ private fun PinnedRowItem(
     onUnpin: () -> Unit
 ) {
     Surface(
+        onClick = { onOpenReader?.invoke() },
+        enabled = onOpenReader != null,
         shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surface,
         border = BorderStroke(0.9.dp, MaterialTheme.colorScheme.outlineVariant),
@@ -1485,12 +1539,10 @@ private fun PinnedRowItem(
                         )
                     }
 
-                    if (isOnline) {
-                        CompletionTickButton(
-                            isCompleted = isCompleted,
-                            onClick = onToggleComplete
-                        )
-                    }
+                    CompletionTickButton(
+                        isCompleted = isCompleted,
+                        onClick = onToggleComplete
+                    )
                 }
             }
 
@@ -1665,18 +1717,18 @@ private fun OneTimeParaSlotCard(
     onTogglePin: () -> Unit,
     onOpenReader: () -> Unit,
     onUnclaim: () -> Unit,
+    onRemoveMember: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val isClaimed = claim != null
-    val isCompleted = isOnline && claim?.isCompleted == true
+    val isCompleted = claim?.isCompleted == true
     val isPinned = claim?.isPinned == true
 
     Surface(
         onClick = {
             if (!isClaimed) onClaimClick()
-            else if (isOnline) onToggleComplete()
-            else onOpenReader()
         },
+        enabled = !isClaimed,
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
         color = if (isCompleted) {
@@ -1851,12 +1903,24 @@ private fun OneTimeParaSlotCard(
                             }
                         }
 
-                        if (isOnline) {
-                            CompletionTickButton(
-                                isCompleted = isCompleted,
-                                onClick = onToggleComplete
-                            )
+                        if (onRemoveMember != null) {
+                            IconButton(
+                                onClick = onRemoveMember,
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Delete,
+                                    contentDescription = "Remove Member",
+                                    tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
                         }
+
+                        CompletionTickButton(
+                            isCompleted = isCompleted,
+                            onClick = onToggleComplete
+                        )
                     }
                 }
             }
@@ -1892,7 +1956,7 @@ private fun CompletionTickButton(
         modifier = modifier
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+            modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
@@ -1907,7 +1971,9 @@ private fun CompletionTickButton(
                 text = if (isCompleted) "Done" else "Tick",
                 style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                 color = if (isCompleted) MaterialTheme.colorScheme.onPrimary
-                else MaterialTheme.colorScheme.onSurfaceVariant
+                else MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                softWrap = false
             )
         }
     }
@@ -2188,10 +2254,11 @@ private fun AmalParticipantCard(
     onUpdateCount: (Int) -> Unit,
     onTogglePin: () -> Unit,
     onToggleComplete: () -> Unit,
+    onRemoveMember: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val haptics = LocalHapticFeedback.current
-    val isCompleted = isOnline && participant.isCompleted
+    val isCompleted = participant.isCompleted
     val isPinned = participant.isPinned
     val currentCount = if (isCompleted) participant.allocatedCount
     else participant.completedCount.coerceIn(0, participant.allocatedCount)
@@ -2313,12 +2380,24 @@ private fun AmalParticipantCard(
                         )
                     }
 
-                    if (isOnline) {
-                        CompletionTickButton(
-                            isCompleted = isCompleted,
-                            onClick = onToggleComplete
-                        )
+                    if (onRemoveMember != null) {
+                        IconButton(
+                            onClick = onRemoveMember,
+                            modifier = Modifier.size(34.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = "Remove ${participant.name}",
+                                tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f),
+                                modifier = Modifier.size(17.dp)
+                            )
+                        }
                     }
+
+                    CompletionTickButton(
+                        isCompleted = isCompleted,
+                        onClick = onToggleComplete
+                    )
                 }
             }
 
@@ -2487,13 +2566,11 @@ private fun KhatmAssignmentSpecimenCard(
     onTogglePin: () -> Unit,
     onOpenReader: () -> Unit,
     onToggleComplete: () -> Unit,
+    onRemoveMember: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
-    val effectiveCompleted = isOnline && isCompleted
+    val effectiveCompleted = isCompleted
     Surface(
-        onClick = {
-            if (isOnline) onToggleComplete() else onOpenReader()
-        },
         modifier = modifier
             .fillMaxWidth()
             .testTag("khatm_assignment_card_${assignment.startPara}"),
@@ -2616,12 +2693,26 @@ private fun KhatmAssignmentSpecimenCard(
                         )
                     }
 
-                    if (isOnline) {
-                        CompletionTickButton(
-                            isCompleted = effectiveCompleted,
-                            onClick = onToggleComplete
-                        )
+                    if (onRemoveMember != null) {
+                        IconButton(
+                            onClick = onRemoveMember,
+                            modifier = Modifier
+                                .size(34.dp)
+                                .testTag("remove_assignment_button_${assignment.startPara}")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = "Remove ${assignment.participantName}",
+                                tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f),
+                                modifier = Modifier.size(17.dp)
+                            )
+                        }
                     }
+
+                    CompletionTickButton(
+                        isCompleted = effectiveCompleted,
+                        onClick = onToggleComplete
+                    )
                 }
             }
 
@@ -2666,7 +2757,7 @@ private fun JumpToParaActionContainer(
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f, fill = false)
             ) {
                 Box(
                     modifier = Modifier
@@ -2684,7 +2775,7 @@ private fun JumpToParaActionContainer(
                 }
 
                 Text(
-                    text = "Quran Reader • $paraLabel",
+                    text = "Qur'an • $paraLabel",
                     style = MaterialTheme.typography.labelMedium.copy(
                         fontWeight = FontWeight.Medium
                     ),
@@ -2703,16 +2794,18 @@ private fun JumpToParaActionContainer(
                 border = BorderStroke(0.8.dp, accentColor.copy(alpha = 0.45f))
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(5.dp)
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     Text(
                         text = buttonText,
                         style = MaterialTheme.typography.labelMedium.copy(
                             fontWeight = FontWeight.Bold
                         ),
-                        color = accentColor
+                        color = accentColor,
+                        maxLines = 1,
+                        softWrap = false
                     )
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowForward,

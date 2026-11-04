@@ -861,7 +861,7 @@ class DistributionViewModel(application: Application) : AndroidViewModel(applica
                             .map { it.specificParaNumber ?: it.displayOrder }
                             .sorted()
                             .joinToString(", ")
-                        val allDone = distribution.isOnline && memberClaims.all { it.isCompleted }
+                        val allDone = memberClaims.all { it.isCompleted }
                         val doneMark = if (allDone) " ✓" else ""
                         val rawLabel = "${first.name.trim()}$guestTag:"
                         val paddedLabel = rawLabel.padEnd(targetColWidth, ' ')
@@ -900,9 +900,7 @@ class DistributionViewModel(application: Application) : AndroidViewModel(applica
 
                     sortedMembers.forEach { p ->
                         val guestTag = if (p.isGuestEntry) " (Guest)" else ""
-                        val doneMark = if (!distribution.isOnline) {
-                            ""
-                        } else if (p.isCompleted) {
+                        val doneMark = if (p.isCompleted) {
                             " ✓"
                         } else if (p.completedCount > 0) {
                             " (${p.completedCount}/${p.allocatedCount})"
@@ -940,7 +938,7 @@ class DistributionViewModel(application: Application) : AndroidViewModel(applica
             val targetColWidth = (maxNameLen + 4).coerceAtLeast(14)
 
             sortedByParasAscending.forEach { assignment ->
-                val isDone = distribution.isOnline && completionByParticipantId[assignment.participantId] == true
+                val isDone = completionByParticipantId[assignment.participantId] == true
                 val doneMark = if (isDone) " ✓" else ""
                 sb.append(
                     assignment.formatAlignedLine(

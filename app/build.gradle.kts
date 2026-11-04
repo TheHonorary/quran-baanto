@@ -30,7 +30,9 @@ android {
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
     val admobAppId = envProps.getProperty("ADMOB_APP_ID", "ca-app-pub-3940256099942544~3347511713")
-    val admobRewardedId = envProps.getProperty("ADMOB_REWARDED_AD_UNIT_ID", "ca-app-pub-3940256099942544/5224354917")
+    val defaultRewardedId = envProps.getProperty("ADMOB_REWARDED_AD_UNIT_ID", "ca-app-pub-3940256099942544/5224354917")
+    val admobRoomRewardedId = envProps.getProperty("ADMOB_ROOM_REWARDED_AD_UNIT_ID", defaultRewardedId)
+    val admobFreezeRewardedId = envProps.getProperty("ADMOB_FREEZE_REWARDED_AD_UNIT_ID", defaultRewardedId)
     val firebaseProjectId = envProps.getProperty("FIREBASE_PROJECT_ID", "quran-baanto")
     val firebaseProjectNumber = envProps.getProperty("FIREBASE_PROJECT_NUMBER", "895060640103")
     val firebaseAppId = envProps.getProperty("FIREBASE_APP_ID", "1:895060640103:android:c4576140c2b29ffb662fc2")
@@ -40,7 +42,9 @@ android {
     manifestPlaceholders["ADMOB_APP_ID"] = admobAppId
 
     buildConfigField("String", "ADMOB_APP_ID", "\"$admobAppId\"")
-    buildConfigField("String", "ADMOB_REWARDED_AD_UNIT_ID", "\"$admobRewardedId\"")
+    buildConfigField("String", "ADMOB_REWARDED_AD_UNIT_ID", "\"$defaultRewardedId\"")
+    buildConfigField("String", "ADMOB_ROOM_REWARDED_AD_UNIT_ID", "\"$admobRoomRewardedId\"")
+    buildConfigField("String", "ADMOB_FREEZE_REWARDED_AD_UNIT_ID", "\"$admobFreezeRewardedId\"")
     buildConfigField("String", "FIREBASE_PROJECT_ID", "\"$firebaseProjectId\"")
     buildConfigField("String", "FIREBASE_PROJECT_NUMBER", "\"$firebaseProjectNumber\"")
     buildConfigField("String", "FIREBASE_APP_ID", "\"$firebaseAppId\"")

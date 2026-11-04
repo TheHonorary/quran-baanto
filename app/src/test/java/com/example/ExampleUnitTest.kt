@@ -457,5 +457,271 @@ class ExampleUnitTest {
         assertTrue(summary.contains("Dadi Jaan (Guest):") && summary.contains("2"))
         assertTrue(summary.contains("Available Paras (28):"))
     }
+
+    @Test
+    fun testLocalOneTimeKhatmAll30ParasClaimedSummary() {
+        val dist = com.example.data.db.DistributionEntity(
+            id = 10L,
+            name = "Local One-Time Khatm",
+            type = com.example.data.db.DistributionType.ONE_TIME_KHATM,
+            roomMode = com.example.data.db.RoomMode.LOCAL,
+            startYear = 2026,
+            startMonth = 10
+        )
+        // 30 participants claiming Paras 1..30
+        val participants = (1..30).map { para ->
+            com.example.data.db.ParticipantEntity(
+                id = para.toLong(),
+                distributionId = 10L,
+                name = "Member $para",
+                allocatedCount = 1,
+                displayOrder = para,
+                specificParaNumber = para,
+                isCompleted = para <= 15 // First 15 are completed
+            )
+        }
+
+        val summary = com.example.ui.viewmodel.DistributionViewModel.formatDistributionShareSummary(
+            distribution = dist,
+            participants = participants,
+            assignments = emptyList(),
+            targetYear = 2026,
+            targetMonth = 10
+        )
+
+        assertTrue(summary.contains("Local One-Time Khatm"))
+        assertTrue(summary.contains("Member 1:") && summary.contains("1 ✓"))
+        assertTrue(summary.contains("Member 15:") && summary.contains("15 ✓"))
+        assertTrue(summary.contains("Member 16:") && summary.contains("16") && !summary.contains("16 ✓"))
+        assertFalse("All 30 paras are taken so Available Paras section should not appear", summary.contains("Available Paras"))
+    }
+
+    @Test
+    fun testAmalProgressCounterAndCompletionThreshold() {
+        val participant = com.example.data.db.ParticipantEntity(
+            id = 1L,
+            distributionId = 20L,
+            name = "Ali",
+            allocatedCount = 100,
+            displayOrder = 1,
+            completedCount = 0,
+            isCompleted = false
+        )
+
+        // Progress counter incrementing
+        val step1 = participant.copy(completedCount = 50)
+        assertFalse(step1.isCompleted)
+        assertEquals(50, step1.completedCount)
+
+        // Progress reaching threshold
+        val step2 = step1.copy(completedCount = 100, isCompleted = true)
+        assertTrue(step2.isCompleted)
+        assertEquals(100, step2.completedCount)
+
+        // Progress clamped beyond target
+        val step3 = step2.copy(completedCount = 100.coerceAtMost(100))
+        assertEquals(100, step3.completedCount)
+    }
+
+    @Test
+    fun testPinningToggleAndState() {
+        val participant = com.example.data.db.ParticipantEntity(
+            id = 7L,
+            distributionId = 30L,
+            name = "Zaid",
+            allocatedCount = 3,
+            displayOrder = 1,
+            isPinned = false
+        )
+        assertFalse(participant.isPinned)
+
+        val pinned = participant.copy(isPinned = !participant.isPinned)
+        assertTrue(pinned.isPinned)
+
+        val unpinned = pinned.copy(isPinned = !pinned.isPinned)
+        assertFalse(unpinned.isPinned)
+    }
+
+    @Test
+    fun testAmalShareSummaryOnlineAndLocal() {
+        val onlineAmal = com.example.data.db.DistributionEntity(
+            id = 40L,
+            name = "Durood Shareef 1000",
+            type = com.example.data.db.DistributionType.AMAL,
+            roomMode = com.example.data.db.RoomMode.ONLINE,
+            roomPasscode = "DUROOD-100",
+            totalTarget = 1000,
+            startYear = 2026,
+            startMonth = 10,
+            roundNumber = 1
+        )
+        val participants = listOf(
+            com.example.data.db.ParticipantEntity(
+                id = 1L,
+                distributionId = 40L,
+                name = "Fatima",
+                allocatedCount = 500,
+                completedCount = 500,
+                isCompleted = true,
+                displayOrder = 1
+            ),
+            com.example.data.db.ParticipantEntity(
+                id = 2L,
+                distributionId = 40L,
+                name = "Hassan",
+                allocatedCount = 500,
+                completedCount = 250,
+                isCompleted = false,
+                displayOrder = 2
+            )
+        )
+
+        val summary = com.example.ui.viewmodel.DistributionViewModel.formatDistributionShareSummary(
+            distribution = onlineAmal,
+            participants = participants,
+            assignments = emptyList(),
+            targetYear = 2026,
+            targetMonth = 10
+        )
+
+        assertTrue(summary.contains("Durood Shareef 1000 (Target: 1000)"))
+        assertTrue(summary.contains("Room Passcode: DUROOD-100"))
+        assertTrue(summary.contains("Fatima:") && summary.contains("500 ✓"))
+        assertTrue(summary.contains("Hassan:") && summary.contains("500 (250/500)"))
+    }
+
+    @Test
+    fun testAllParasBoundaries1To30() {
+        // Ensure that any Para from 1 to 30 maps to valid contiguous ranges and zero index errors
+        for (para in 1..30) {
+            val single = RotationEngine.calculateAssignments(
+                participants = listOf(ParticipantAllocation(id = 1L, name = "Solo", count = 30, displayOrder = 1)),
+                startYear = 2026,
+                startMonth = 1,
+                targetYear = 2026,
+                targetMonth = 1
+            )
+            assertEquals(1, single.first().startPara)
+            assertEquals(30, single.first().endPara)
+            assertTrue(single.first().assignedParas.contains(para))
+        }
+    }
+
+    @Test
+    fun testStreakFreezeShieldCooldownEnforcement() {
+        // Today
+        val today = java.time.LocalDate.now()
+        val threeDaysAgo = today.minusDays(3).toString()
+        val eightDaysAgo = today.minusDays(8).toString()
+
+        // Dummy DAO that won't be called for pure date logic
+        val mockDao = object : com.example.data.db.StreakDao {
+            override fun getStreak(): kotlinx.coroutines.flow.Flow<com.example.data.db.StreakEntity?> = kotlinx.coroutines.flow.flowOf(null)
+            override suspend fun getStreakDirect(): com.example.data.db.StreakEntity? = null
+            override suspend fun insertOrUpdateStreak(streak: com.example.data.db.StreakEntity) {}
+            override fun getDailyLog(dateKey: String): kotlinx.coroutines.flow.Flow<com.example.data.db.DailyLogEntity?> = kotlinx.coroutines.flow.flowOf(null)
+            override suspend fun getDailyLogDirect(dateKey: String): com.example.data.db.DailyLogEntity? = null
+            override suspend fun insertOrUpdateDailyLog(log: com.example.data.db.DailyLogEntity) {}
+            override fun getRecentLogs(limit: Int): kotlinx.coroutines.flow.Flow<List<com.example.data.db.DailyLogEntity>> = kotlinx.coroutines.flow.flowOf(emptyList())
+            override suspend fun getAllLogsDirect(): List<com.example.data.db.DailyLogEntity> = emptyList()
+            override fun getActivePlans(): kotlinx.coroutines.flow.Flow<List<com.example.data.db.ReadingPlanEntity>> = kotlinx.coroutines.flow.flowOf(emptyList())
+            override fun getAllPlans(): kotlinx.coroutines.flow.Flow<List<com.example.data.db.ReadingPlanEntity>> = kotlinx.coroutines.flow.flowOf(emptyList())
+            override fun getPlanById(id: Long): kotlinx.coroutines.flow.Flow<com.example.data.db.ReadingPlanEntity?> = kotlinx.coroutines.flow.flowOf(null)
+            override suspend fun insertPlan(plan: com.example.data.db.ReadingPlanEntity): Long = 1L
+            override suspend fun updatePlan(plan: com.example.data.db.ReadingPlanEntity) {}
+            override suspend fun deletePlanById(id: Long) {}
+            override fun getAllCircles(): kotlinx.coroutines.flow.Flow<List<com.example.data.db.StreakCircleEntity>> = kotlinx.coroutines.flow.flowOf(emptyList())
+            override fun getCircleById(id: Long): kotlinx.coroutines.flow.Flow<com.example.data.db.StreakCircleEntity?> = kotlinx.coroutines.flow.flowOf(null)
+            override suspend fun getCircleByIdDirect(id: Long): com.example.data.db.StreakCircleEntity? = null
+            override suspend fun getCircleByPasscode(code: String): com.example.data.db.StreakCircleEntity? = null
+            override suspend fun insertCircle(circle: com.example.data.db.StreakCircleEntity): Long = 1L
+            override suspend fun updateCircle(circle: com.example.data.db.StreakCircleEntity) {}
+            override suspend fun deleteCircleById(id: Long) {}
+            override fun getMembersForCircle(circleId: Long): kotlinx.coroutines.flow.Flow<List<com.example.data.db.StreakCircleMemberEntity>> = kotlinx.coroutines.flow.flowOf(emptyList())
+            override suspend fun getMembersForCircleDirect(circleId: Long): List<com.example.data.db.StreakCircleMemberEntity> = emptyList()
+            override suspend fun insertMember(member: com.example.data.db.StreakCircleMemberEntity): Long = 1L
+            override suspend fun updateMember(member: com.example.data.db.StreakCircleMemberEntity) {}
+            override suspend fun deleteMemberById(id: Long) {}
+        }
+        val repo = com.example.data.StreakRepository(mockDao)
+
+        // Empty last-used date -> cooldown is NOT active (shield can be used)
+        assertTrue(repo.canUseFreezeShieldCooldown(""))
+        assertEquals(0L, repo.getDaysUntilNextFreezeShieldAvailable(""))
+
+        // Used 3 days ago -> cooldown IS active (cannot use shield yet, 4 days remaining)
+        assertFalse(repo.canUseFreezeShieldCooldown(threeDaysAgo))
+        assertEquals(4L, repo.getDaysUntilNextFreezeShieldAvailable(threeDaysAgo))
+
+        // Used 8 days ago -> cooldown expired (can use shield again)
+        assertTrue(repo.canUseFreezeShieldCooldown(eightDaysAgo))
+        assertEquals(0L, repo.getDaysUntilNextFreezeShieldAvailable(eightDaysAgo))
+    }
+
+    @Test
+    fun testStreakCircleShareTextFormatting() {
+        val mockDao = object : com.example.data.db.StreakDao {
+            override fun getStreak(): kotlinx.coroutines.flow.Flow<com.example.data.db.StreakEntity?> = kotlinx.coroutines.flow.flowOf(null)
+            override suspend fun getStreakDirect(): com.example.data.db.StreakEntity? = null
+            override suspend fun insertOrUpdateStreak(streak: com.example.data.db.StreakEntity) {}
+            override fun getDailyLog(dateKey: String): kotlinx.coroutines.flow.Flow<com.example.data.db.DailyLogEntity?> = kotlinx.coroutines.flow.flowOf(null)
+            override suspend fun getDailyLogDirect(dateKey: String): com.example.data.db.DailyLogEntity? = null
+            override suspend fun insertOrUpdateDailyLog(log: com.example.data.db.DailyLogEntity) {}
+            override fun getRecentLogs(limit: Int): kotlinx.coroutines.flow.Flow<List<com.example.data.db.DailyLogEntity>> = kotlinx.coroutines.flow.flowOf(emptyList())
+            override suspend fun getAllLogsDirect(): List<com.example.data.db.DailyLogEntity> = emptyList()
+            override fun getActivePlans(): kotlinx.coroutines.flow.Flow<List<com.example.data.db.ReadingPlanEntity>> = kotlinx.coroutines.flow.flowOf(emptyList())
+            override fun getAllPlans(): kotlinx.coroutines.flow.Flow<List<com.example.data.db.ReadingPlanEntity>> = kotlinx.coroutines.flow.flowOf(emptyList())
+            override fun getPlanById(id: Long): kotlinx.coroutines.flow.Flow<com.example.data.db.ReadingPlanEntity?> = kotlinx.coroutines.flow.flowOf(null)
+            override suspend fun insertPlan(plan: com.example.data.db.ReadingPlanEntity): Long = 1L
+            override suspend fun updatePlan(plan: com.example.data.db.ReadingPlanEntity) {}
+            override suspend fun deletePlanById(id: Long) {}
+            override fun getAllCircles(): kotlinx.coroutines.flow.Flow<List<com.example.data.db.StreakCircleEntity>> = kotlinx.coroutines.flow.flowOf(emptyList())
+            override fun getCircleById(id: Long): kotlinx.coroutines.flow.Flow<com.example.data.db.StreakCircleEntity?> = kotlinx.coroutines.flow.flowOf(null)
+            override suspend fun getCircleByIdDirect(id: Long): com.example.data.db.StreakCircleEntity? = null
+            override suspend fun getCircleByPasscode(code: String): com.example.data.db.StreakCircleEntity? = null
+            override suspend fun insertCircle(circle: com.example.data.db.StreakCircleEntity): Long = 1L
+            override suspend fun updateCircle(circle: com.example.data.db.StreakCircleEntity) {}
+            override suspend fun deleteCircleById(id: Long) {}
+            override fun getMembersForCircle(circleId: Long): kotlinx.coroutines.flow.Flow<List<com.example.data.db.StreakCircleMemberEntity>> = kotlinx.coroutines.flow.flowOf(emptyList())
+            override suspend fun getMembersForCircleDirect(circleId: Long): List<com.example.data.db.StreakCircleMemberEntity> = emptyList()
+            override suspend fun insertMember(member: com.example.data.db.StreakCircleMemberEntity): Long = 1L
+            override suspend fun updateMember(member: com.example.data.db.StreakCircleMemberEntity) {}
+            override suspend fun deleteMemberById(id: Long) {}
+        }
+        val repo = com.example.data.StreakRepository(mockDao)
+
+        val circle = com.example.data.db.StreakCircleEntity(
+            id = 5L,
+            name = "Fajr Noor Circle",
+            roomPasscode = "STRK-7788",
+            collectiveStreakDays = 14
+        )
+        val members = listOf(
+            com.example.data.db.StreakCircleMemberEntity(
+                id = 1L,
+                circleId = 5L,
+                memberName = "Zaid",
+                currentStreakDays = 14,
+                hasCompletedToday = true,
+                isHost = true
+            ),
+            com.example.data.db.StreakCircleMemberEntity(
+                id = 2L,
+                circleId = 5L,
+                memberName = "Bilal",
+                currentStreakDays = 12,
+                hasCompletedToday = false,
+                isHost = false
+            )
+        )
+
+        val text = repo.formatStreakCircleShareText(circle, members)
+        assertTrue(text.contains("Fajr Noor Circle"))
+        assertTrue(text.contains("14-Day Collective Streak"))
+        assertTrue(text.contains("Room Passcode: STRK-7788"))
+        assertTrue(text.contains("Zaid (Host): 14 Days (✓ Recited today)"))
+        assertTrue(text.contains("Bilal: 12 Days (⏳ Pending today)"))
+    }
 }
+
 

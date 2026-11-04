@@ -155,6 +155,7 @@ private sealed interface FlattenedReaderItem {
 fun QuranReaderScreen(
     quranViewModel: QuranViewModel,
     onBack: () -> Unit,
+    onAyahRead: ((surahNum: Int, ayahNum: Int, paraNum: Int, surahName: String) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -290,10 +291,22 @@ fun QuranReaderScreen(
         }
 
         if (targetIdx >= 0) {
+            kotlinx.coroutines.delay(80)
             listState.scrollToItem(targetIdx)
         }
         quranViewModel.clearTargetScrollAyah()
     }
+
+    // Automatic Ayah scroll counter with reader progress tracking
+    LaunchedEffect(listState.firstVisibleItemIndex, flattenedItems) {
+        val idx = listState.firstVisibleItemIndex
+        val item = flattenedItems.getOrNull(idx)
+        if (item is FlattenedReaderItem.VerseItem) {
+            val pNum = if (isParaMode) (selectedParaNumber ?: 1) else (surahDetail?.info?.startingPara ?: 1)
+            onAyahRead?.invoke(item.surahNumber, item.ayahNumber, pNum, item.surahNameEnglish)
+        }
+    }
+
 
     // Peaceful, high-legibility palette for each reading environment
     val (backgroundColor, textColor, headerBgColor, markerColor) = when (readingTheme) {

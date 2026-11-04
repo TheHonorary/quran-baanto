@@ -17,6 +17,7 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -42,17 +43,21 @@ import com.example.ui.distribution.DistributionDetailScreen
 import com.example.ui.distribution.DistributionListScreen
 import com.example.ui.home.HomeScreen
 import com.example.ui.navigation.BottomNavItem
+import com.example.ui.navigation.FloatingSanctuaryNavDock
 import com.example.ui.quran.QuranListScreen
 import com.example.ui.quran.QuranReaderScreen
 import com.example.ui.settings.SettingsSheet
 import com.example.ui.theme.QuranBaantoTheme
+import com.example.ui.streak.JourneyScreen
 import com.example.ui.viewmodel.DistributionViewModel
 import com.example.ui.viewmodel.QuranViewModel
+import com.example.ui.viewmodel.StreakViewModel
 
 @Composable
 fun MainScreen() {
     val quranViewModel: QuranViewModel = viewModel()
     val distributionViewModel: DistributionViewModel = viewModel()
+    val streakViewModel: StreakViewModel = viewModel()
     val isDarkTheme by quranViewModel.isDarkTheme.collectAsState()
     var showSettingsSheet by remember { mutableStateOf(false) }
 
@@ -65,11 +70,12 @@ fun MainScreen() {
         val bottomNavItems = listOf(
             BottomNavItem.Home,
             BottomNavItem.Quran,
-            BottomNavItem.Distributions
+            BottomNavItem.Distributions,
+            BottomNavItem.Streaks
         )
 
         // Show bottom navigation bar only on main tab routes
-        val shouldShowBottomBar = currentRoute in listOf("home", "quran", "distributions")
+        val shouldShowBottomBar = currentRoute in listOf("home", "quran", "distributions", "streaks")
 
         Scaffold(
             bottomBar = {
@@ -78,54 +84,20 @@ fun MainScreen() {
                     enter = fadeIn() + slideInVertically { it },
                     exit = fadeOut() + slideOutVertically { it }
                 ) {
-                    NavigationBar(
-                        containerColor = MaterialTheme.colorScheme.surface,
-                        tonalElevation = 4.dp,
-                        windowInsets = NavigationBarDefaults.windowInsets
-                    ) {
-                        bottomNavItems.forEach { item ->
-                            val isSelected = currentRoute == item.route
-                            NavigationBarItem(
-                                selected = isSelected,
-                                onClick = {
-                                    if (currentRoute != item.route) {
-                                        navController.navigate(item.route) {
-                                            popUpTo(navController.graph.findStartDestination().id) {
-                                                saveState = true
-                                            }
-                                            launchSingleTop = true
-                                            restoreState = true
-                                        }
+                    FloatingSanctuaryNavDock(
+                        currentRoute = currentRoute ?: BottomNavItem.Home.route,
+                        onNavigate = { route ->
+                            if (currentRoute != route) {
+                                navController.navigate(route) {
+                                    popUpTo(navController.graph.findStartDestination().id) {
+                                        saveState = true
                                     }
-                                },
-                                icon = {
-                                    Icon(
-                                        imageVector = if (isSelected) item.selectedIcon else item.unselectedIcon,
-                                        contentDescription = item.title
-                                    )
-                                },
-                                label = {
-                                    Text(
-                                        text = item.title,
-                                        style = MaterialTheme.typography.labelMedium.copy(
-                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                                        )
-                                    )
-                                },
-                                colors = NavigationBarItemDefaults.colors(
-                                    selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                                    selectedTextColor = MaterialTheme.colorScheme.primary,
-                                    indicatorColor = MaterialTheme.colorScheme.primaryContainer,
-                                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
-                                ),
-                                modifier = Modifier.semantics {
-                                    role = Role.Tab
-                                    contentDescription = "${item.title} tab"
+                                    launchSingleTop = true
+                                    restoreState = true
                                 }
-                            )
+                            }
                         }
-                    }
+                    )
                 }
             },
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
@@ -144,6 +116,7 @@ fun MainScreen() {
                     HomeScreen(
                         distributionViewModel = distributionViewModel,
                         quranViewModel = quranViewModel,
+                        streakViewModel = streakViewModel,
                         onNavigateToQuran = {
                             navController.navigate(BottomNavItem.Quran.route) {
                                 popUpTo(navController.graph.findStartDestination().id) { saveState = true }
@@ -158,22 +131,25 @@ fun MainScreen() {
                                 restoreState = true
                             }
                         },
+                        onNavigateToStreaks = {
+                            navController.navigate(BottomNavItem.Streaks.route) {
+                                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
+                        },
                         onCreateNewDistribution = { type ->
                             navController.navigate("create_edit_distribution?type=${type.name}")
                         },
                         onOpenDistributionDetail = { distId ->
                             navController.navigate("distribution_detail/$distId")
                         },
-                        onOpenParaReader = { paraNum ->
-                            if (quranViewModel.selectedParaNumber.value != paraNum || quranViewModel.targetScrollAyah.value == null) {
-                                quranViewModel.selectPara(paraNum)
-                            }
+                        onOpenParaReader = { paraNum, targetAyah, targetSurah ->
+                            quranViewModel.selectPara(paraNum, targetAyah, targetSurah)
                             navController.navigate("quran_reader_para/$paraNum")
                         },
-                        onOpenSurahReader = { surahNum ->
-                            if (quranViewModel.selectedSurahNumber.value != surahNum || quranViewModel.targetScrollAyah.value == null) {
-                                quranViewModel.selectSurah(surahNum)
-                            }
+                        onOpenSurahReader = { surahNum, targetAyah ->
+                            quranViewModel.selectSurah(surahNum, targetAyah)
                             navController.navigate("quran_reader_surah/$surahNum")
                         },
                         onOpenSettings = { showSettingsSheet = true }
@@ -205,9 +181,17 @@ fun MainScreen() {
                     arguments = listOf(navArgument("paraNum") { type = NavType.IntType })
                 ) { backStackEntry ->
                     val paraNum = backStackEntry.arguments?.getInt("paraNum") ?: 1
+                    LaunchedEffect(paraNum) {
+                        if (quranViewModel.selectedParaNumber.value != paraNum) {
+                            quranViewModel.selectPara(paraNum)
+                        }
+                    }
                     QuranReaderScreen(
                         quranViewModel = quranViewModel,
-                        onBack = { navController.popBackStack() }
+                        onBack = { navController.popBackStack() },
+                        onAyahRead = { sNum, aNum, pNum, sName ->
+                            streakViewModel.recordAyahRecitation(1, sNum, aNum, pNum, sName)
+                        }
                     )
                 }
 
@@ -216,19 +200,36 @@ fun MainScreen() {
                     arguments = listOf(navArgument("surahNum") { type = NavType.IntType })
                 ) { backStackEntry ->
                     val surahNum = backStackEntry.arguments?.getInt("surahNum") ?: 1
+                    LaunchedEffect(surahNum) {
+                        if (quranViewModel.selectedSurahNumber.value != surahNum) {
+                            quranViewModel.selectSurah(surahNum)
+                        }
+                    }
                     QuranReaderScreen(
                         quranViewModel = quranViewModel,
-                        onBack = { navController.popBackStack() }
+                        onBack = { navController.popBackStack() },
+                        onAyahRead = { sNum, aNum, pNum, sName ->
+                            streakViewModel.recordAyahRecitation(1, sNum, aNum, pNum, sName)
+                        }
                     )
                 }
 
                 composable(
                     route = "quran_reader/{paraNum}",
                     arguments = listOf(navArgument("paraNum") { type = NavType.IntType })
-                ) {
+                ) { backStackEntry ->
+                    val paraNum = backStackEntry.arguments?.getInt("paraNum") ?: 1
+                    LaunchedEffect(paraNum) {
+                        if (quranViewModel.selectedParaNumber.value != paraNum) {
+                            quranViewModel.selectPara(paraNum)
+                        }
+                    }
                     QuranReaderScreen(
                         quranViewModel = quranViewModel,
-                        onBack = { navController.popBackStack() }
+                        onBack = { navController.popBackStack() },
+                        onAyahRead = { sNum, aNum, pNum, sName ->
+                            streakViewModel.recordAyahRecitation(1, sNum, aNum, pNum, sName)
+                        }
                     )
                 }
 
@@ -244,6 +245,22 @@ fun MainScreen() {
                         }
                     )
                 }
+
+                // Streaks & Plans Journey Screen
+                composable(BottomNavItem.Streaks.route) {
+                    JourneyScreen(
+                        streakViewModel = streakViewModel,
+                        onContinueReading = { paraNum, surahNum, ayahNum ->
+                            quranViewModel.selectPara(
+                                paraNumber = paraNum,
+                                targetAyah = ayahNum,
+                                targetSurah = surahNum
+                            )
+                            navController.navigate("quran_reader_para/$paraNum")
+                        }
+                    )
+                }
+
 
                 // Distribution Detail Screen
                 composable(

@@ -2,6 +2,7 @@ package com.example.ui.quran
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -55,16 +56,26 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import com.example.data.quran.LastReadBookmark
 import com.example.data.quran.ParaInfo
 import com.example.data.quran.ReadMode
 import com.example.data.quran.RevelationType
 import com.example.data.quran.SurahInfo
+import com.example.ui.components.ChiseledSanctuaryButton
 import com.example.ui.components.ManuscriptOrnamentDivider
 import com.example.ui.components.OctagonalNumberMedallion
 import com.example.ui.components.PeacefulEmptyState
 import com.example.ui.components.SanctuaryTopHeader
 import com.example.ui.components.parseAyah
+import com.example.ui.theme.SanctuaryEmeraldDark
+import com.example.ui.theme.SanctuaryEmeraldMedium
+import com.example.ui.theme.SanctuaryGoldAmber
+import com.example.ui.theme.SanctuaryGoldBright
+import com.example.ui.theme.SanctuaryGoldHalo
+import com.example.ui.theme.SanctuaryGoldWarm
+import com.example.ui.theme.SanctuaryParchmentWarm
 import com.example.ui.viewmodel.QuranViewModel
 
 private data class ParaDivisionGroup(
@@ -421,14 +432,18 @@ fun QuranListScreen(
                                             modifier = Modifier.fillMaxWidth(),
                                             horizontalArrangement = Arrangement.spacedBy(14.dp)
                                         ) {
+                                            val isBm0 = lastReadBookmark?.id == pair[0].number && lastReadBookmark?.mode == ReadMode.PARA
                                             ParaGridTileCard(
                                                 para = pair[0],
+                                                isBookmarked = isBm0,
                                                 onClick = { onOpenParaReader(pair[0].number) },
                                                 modifier = Modifier.weight(1f)
                                             )
                                             if (pair.size > 1) {
+                                                val isBm1 = lastReadBookmark?.id == pair[1].number && lastReadBookmark?.mode == ReadMode.PARA
                                                 ParaGridTileCard(
                                                     para = pair[1],
+                                                    isBookmarked = isBm1,
                                                     onClick = { onOpenParaReader(pair[1].number) },
                                                     modifier = Modifier.weight(1f)
                                                 )
@@ -443,8 +458,10 @@ fun QuranListScreen(
                                         key = { "para_${it.number}" },
                                         contentType = { "para_card" }
                                     ) { para ->
+                                        val isBm = lastReadBookmark?.id == para.number && lastReadBookmark?.mode == ReadMode.PARA
                                         ParaSpecimenCard(
                                             para = para,
+                                            isBookmarked = isBm,
                                             onClick = { onOpenParaReader(para.number) }
                                         )
                                     }
@@ -468,8 +485,10 @@ fun QuranListScreen(
                                 key = { "surah_${it.number}" },
                                 contentType = { "surah_card" }
                             ) { surah ->
+                                val isBm = lastReadBookmark?.id == surah.number && lastReadBookmark?.mode == ReadMode.SURAH
                                 SurahSpecimenCard(
                                     surah = surah,
+                                    isBookmarked = isBm,
                                     onClick = { onOpenSurahReader(surah.number) }
                                 )
                             }
@@ -656,123 +675,135 @@ fun ContinueReadingCard(
         modifier = modifier
             .fillMaxWidth()
             .testTag("continue_reading_card"),
-        shape = RoundedCornerShape(18.dp),
-        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
+        shape = RoundedCornerShape(20.dp),
+        color = SanctuaryEmeraldDark,
+        border = BorderStroke(1.2.dp, SanctuaryGoldWarm.copy(alpha = 0.85f)),
+        shadowElevation = 4.dp
     ) {
-        Row(
+        Box(
             modifier = Modifier
-                .padding(horizontal = 18.dp, vertical = 16.dp)
-                .fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(44.dp)
-                    .clip(RoundedCornerShape(13.dp))
-                    .background(MaterialTheme.colorScheme.primary),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Bookmark,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onPrimary,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.width(16.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Text(
-                        text = "CONTINUE READING",
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 0.9.sp,
-                            fontSize = 10.sp
+                .fillMaxWidth()
+                .background(
+                    Brush.radialGradient(
+                        colors = listOf(
+                            SanctuaryGoldWarm.copy(alpha = 0.15f),
+                            Color.Transparent
                         ),
-                        color = MaterialTheme.colorScheme.primary
+                        radius = 420f
                     )
-                    if (totalBookmarksCount > 1) {
-                        Surface(
-                            shape = RoundedCornerShape(6.dp),
-                            color = MaterialTheme.colorScheme.secondaryContainer
-                        ) {
-                            Text(
-                                text = "$totalBookmarksCount Saved",
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 9.sp
-                                ),
-                                color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                            )
+                )
+        ) {
+            Row(
+                modifier = Modifier
+                    .padding(horizontal = 20.dp, vertical = 18.dp)
+                    .fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(46.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(SanctuaryGoldWarm.copy(alpha = 0.2f))
+                        .border(1.dp, SanctuaryGoldWarm, RoundedCornerShape(14.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Bookmark,
+                        contentDescription = null,
+                        tint = SanctuaryGoldBright,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(16.dp))
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = "CONTINUE RECITATION",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontWeight = FontWeight.ExtraBold,
+                                letterSpacing = 1.1.sp,
+                                fontSize = 10.sp
+                            ),
+                            color = SanctuaryGoldBright
+                        )
+                        if (totalBookmarksCount > 1) {
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = SanctuaryGoldWarm.copy(alpha = 0.25f),
+                                border = BorderStroke(0.6.dp, SanctuaryGoldBright.copy(alpha = 0.5f))
+                            ) {
+                                Text(
+                                    text = "$totalBookmarksCount Saved",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 9.sp
+                                    ),
+                                    color = SanctuaryGoldBright,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
                         }
                     }
-                }
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = bookmark.title,
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 16.sp
-                    ),
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                if (bookmark.subtitle.isNotBlank()) {
-                    Spacer(modifier = Modifier.height(2.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = bookmark.subtitle,
-                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        text = bookmark.title,
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 17.sp
+                        ),
+                        color = Color.White,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
+                    if (bookmark.subtitle.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = bookmark.subtitle,
+                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                            color = Color.White.copy(alpha = 0.75f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
-            }
 
-            Spacer(modifier = Modifier.width(10.dp))
+                Spacer(modifier = Modifier.width(12.dp))
 
-            Surface(
-                shape = RoundedCornerShape(12.dp),
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(38.dp)
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                        contentDescription = "Resume",
-                        tint = MaterialTheme.colorScheme.onPrimary,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
+                ChiseledSanctuaryButton(
+                    text = "Resume",
+                    icon = Icons.AutoMirrored.Filled.ArrowForward,
+                    onClick = onResume,
+                    modifier = Modifier.testTag("resume_reading_button")
+                )
             }
         }
     }
 }
 
 /**
- * Airy, decluttered Para card with generous padding and clear visual separation
- * so the eyes can breathe between items.
+ * Illuminated Sanctuary Para card with gilded perimeter and live reading beacon.
  */
 @Composable
 private fun ParaSpecimenCard(
     para: ParaInfo,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isBookmarked: Boolean = false
 ) {
+    val borderColor = if (isBookmarked) SanctuaryGoldWarm else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.75f)
+    val borderWidth = if (isBookmarked) 1.5.dp else 1.dp
+
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(20.dp),
         color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.85f)),
-        tonalElevation = 1.dp,
+        border = BorderStroke(borderWidth, borderColor),
+        tonalElevation = if (isBookmarked) 3.dp else 1.dp,
         modifier = modifier
             .fillMaxWidth()
             .testTag("para_item_card_${para.number}")
@@ -794,15 +825,38 @@ private fun ParaSpecimenCard(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                Text(
-                    text = "PARA ${para.number.toString().padStart(2, '0')}",
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.1.sp,
-                        fontSize = 10.sp
-                    ),
-                    color = MaterialTheme.colorScheme.secondary
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = "PARA ${para.number.toString().padStart(2, '0')}",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.1.sp,
+                            fontSize = 10.sp
+                        ),
+                        color = if (isBookmarked) SanctuaryGoldAmber else MaterialTheme.colorScheme.secondary
+                    )
+                    if (isBookmarked) {
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = SanctuaryGoldWarm.copy(alpha = 0.18f),
+                            border = BorderStroke(0.6.dp, SanctuaryGoldWarm.copy(alpha = 0.6f))
+                        ) {
+                            Text(
+                                text = "LAST READ",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.ExtraBold,
+                                    fontSize = 9.sp,
+                                    letterSpacing = 0.5.sp
+                                ),
+                                color = SanctuaryGoldAmber,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+                }
 
                 Text(
                     text = para.transliteration,
@@ -829,17 +883,17 @@ private fun ParaSpecimenCard(
 
             Spacer(modifier = Modifier.width(12.dp))
 
-            // Right-aligned poised Arabic calligraphy & subtle verse count
+            // Right-aligned poised Arabic calligraphy badge & subtle verse count
             Column(
                 horizontalAlignment = Alignment.End,
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Surface(
                     shape = RoundedCornerShape(12.dp),
-                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f),
+                    color = if (isBookmarked) SanctuaryEmeraldMedium.copy(alpha = 0.15f) else MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f),
                     border = BorderStroke(
-                        0.6.dp,
-                        MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
+                        0.8.dp,
+                        if (isBookmarked) SanctuaryGoldWarm.copy(alpha = 0.6f) else MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
                     )
                 ) {
                     Text(
@@ -870,20 +924,24 @@ private fun ParaSpecimenCard(
 }
 
 /**
- * Clean 2-column grid tile option for browsing Paras in a compact, breathable mosaic.
+ * 30-Para Sacred Geometric Dial Tile for browsing Paras in an illuminated manuscript mosaic.
  */
 @Composable
 private fun ParaGridTileCard(
     para: ParaInfo,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isBookmarked: Boolean = false
 ) {
+    val borderColor = if (isBookmarked) SanctuaryGoldWarm else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.8f)
+    val borderWidth = if (isBookmarked) 1.5.dp else 1.dp
+
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(20.dp),
         color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.85f)),
-        tonalElevation = 1.dp,
+        border = BorderStroke(borderWidth, borderColor),
+        tonalElevation = if (isBookmarked) 3.dp else 1.dp,
         modifier = modifier.testTag("para_grid_card_${para.number}")
     ) {
         Column(
@@ -901,16 +959,36 @@ private fun ParaGridTileCard(
                     number = para.number,
                     size = 40.dp
                 )
-                Text(
-                    text = para.arabicTitle,
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Serif,
-                        fontSize = 18.sp
-                    ),
-                    color = MaterialTheme.colorScheme.primary,
-                    maxLines = 1
-                )
+
+                if (isBookmarked) {
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = SanctuaryGoldWarm.copy(alpha = 0.2f),
+                        border = BorderStroke(0.6.dp, SanctuaryGoldWarm)
+                    ) {
+                        Text(
+                            text = "ACTIVE",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 8.5.sp,
+                                letterSpacing = 0.5.sp
+                            ),
+                            color = SanctuaryGoldAmber,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+                } else {
+                    Text(
+                        text = para.arabicTitle,
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Serif,
+                            fontSize = 17.sp
+                        ),
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1
+                    )
+                }
             }
 
             Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
@@ -921,7 +999,7 @@ private fun ParaGridTileCard(
                         letterSpacing = 0.9.sp,
                         fontSize = 10.sp
                     ),
-                    color = MaterialTheme.colorScheme.secondary
+                    color = if (isBookmarked) SanctuaryGoldAmber else MaterialTheme.colorScheme.secondary
                 )
                 Text(
                     text = para.transliteration,
@@ -946,22 +1024,26 @@ private fun ParaGridTileCard(
 }
 
 /**
- * Airy, well-proportioned Surah card with clean typographic hierarchy.
+ * Airy, well-proportioned Surah card with clean typographic hierarchy and revelation emblems.
  */
 @Composable
 private fun SurahSpecimenCard(
     surah: SurahInfo,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isBookmarked: Boolean = false
 ) {
-    val revLabel = if (surah.revelationType == RevelationType.MAKKI) "MAKKI" else "MADANI"
+    val isMakki = surah.revelationType == RevelationType.MAKKI
+    val revLabel = if (isMakki) "MAKKI" else "MADANI"
+    val borderColor = if (isBookmarked) SanctuaryGoldWarm else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.8f)
+    val borderWidth = if (isBookmarked) 1.5.dp else 1.dp
 
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(20.dp),
         color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.85f)),
-        tonalElevation = 1.dp,
+        border = BorderStroke(borderWidth, borderColor),
+        tonalElevation = if (isBookmarked) 3.dp else 1.dp,
         modifier = modifier
             .fillMaxWidth()
             .testTag("surah_item_card_${surah.number}")
@@ -983,15 +1065,35 @@ private fun SurahSpecimenCard(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                Text(
-                    text = "SURAH ${surah.number.toString().padStart(3, '0')} • $revLabel • PARA ${surah.startingPara}",
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 0.8.sp,
-                        fontSize = 10.sp
-                    ),
-                    color = MaterialTheme.colorScheme.secondary
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        text = "SURAH ${surah.number.toString().padStart(3, '0')} • PARA ${surah.startingPara}",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 0.8.sp,
+                            fontSize = 10.sp
+                        ),
+                        color = MaterialTheme.colorScheme.secondary
+                    )
+                    Surface(
+                        shape = RoundedCornerShape(5.dp),
+                        color = if (isMakki) SanctuaryGoldWarm.copy(alpha = 0.18f) else SanctuaryEmeraldMedium.copy(alpha = 0.15f),
+                        border = BorderStroke(0.5.dp, if (isMakki) SanctuaryGoldAmber.copy(alpha = 0.4f) else MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
+                    ) {
+                        Text(
+                            text = revLabel,
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 9.sp
+                            ),
+                            color = if (isMakki) SanctuaryGoldAmber else MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+                        )
+                    }
+                }
 
                 Text(
                     text = surah.transliteration,

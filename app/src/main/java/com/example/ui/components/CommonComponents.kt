@@ -71,6 +71,7 @@ fun SanctuaryTopHeader(
     leadingLogo: Boolean = false,
     leadingStaticGlyph: Boolean = false,
     isQuranGlyph: Boolean = true,
+    customLeadingIcon: androidx.compose.ui.graphics.vector.ImageVector? = null,
     badgeText: String? = null,
     actions: @Composable RowScope.() -> Unit = {},
     modifier: Modifier = Modifier
@@ -112,6 +113,22 @@ fun SanctuaryTopHeader(
                                     modifier = Modifier.size(19.dp)
                                 )
                             }
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                    } else if (customLeadingIcon != null) {
+                        Box(
+                            modifier = Modifier
+                                .size(38.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = customLeadingIcon,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(22.dp)
+                            )
                         }
                         Spacer(modifier = Modifier.width(12.dp))
                     } else if (leadingLogo) {
@@ -990,4 +1007,154 @@ fun parseAyah(rawVerse: String, fallbackNumber: Int): ParsedAyah {
         arabicDigits = fallbackNumber.toArabicNumerals()
     )
 }
+
+/**
+ * Distinctive, Chiseled Gilded Capsule Button.
+ * Replaces generic rounded buttons with beveled gold border strokes,
+ * subtle interior emerald radial gradient, and gold illumination.
+ */
+@Composable
+fun ChiseledSanctuaryButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    icon: ImageVector? = null,
+    isPrimary: Boolean = true,
+    enabled: Boolean = true
+) {
+    val borderColor = if (isPrimary) com.example.ui.theme.SanctuaryGoldWarm else com.example.ui.theme.WarmOutline
+    val containerBg = if (isPrimary) {
+        androidx.compose.ui.graphics.Brush.horizontalGradient(
+            listOf(
+                com.example.ui.theme.SanctuaryEmeraldMedium,
+                com.example.ui.theme.SanctuaryEmeraldDark
+            )
+        )
+    } else {
+        androidx.compose.ui.graphics.Brush.horizontalGradient(
+            listOf(
+                MaterialTheme.colorScheme.surface,
+                MaterialTheme.colorScheme.surfaceVariant
+            )
+        )
+    }
+    val contentColor = if (isPrimary) com.example.ui.theme.SanctuaryGoldBright else MaterialTheme.colorScheme.onSurface
+
+    Surface(
+        onClick = onClick,
+        enabled = enabled,
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(1.2.dp, borderColor.copy(alpha = if (enabled) 0.85f else 0.35f)),
+        color = Color.Transparent,
+        modifier = modifier
+            .height(48.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(containerBg)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 18.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            if (icon != null) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = contentColor,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+            }
+            Text(
+                text = text,
+                style = MaterialTheme.typography.labelLarge.copy(
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.5.sp
+                ),
+                color = contentColor
+            )
+        }
+    }
+}
+
+/**
+ * Luminous Orb Button with warm golden halo aura.
+ */
+@Composable
+fun LuminousOrbButton(
+    icon: ImageVector,
+    contentDescription: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    badgeText: String? = null,
+    sizeDp: Dp = 48.dp
+) {
+    Box(
+        modifier = modifier.size(sizeDp),
+        contentAlignment = Alignment.Center
+    ) {
+        Surface(
+            onClick = onClick,
+            shape = CircleShape,
+            color = com.example.ui.theme.SanctuaryEmeraldMedium,
+            border = BorderStroke(1.5.dp, com.example.ui.theme.SanctuaryGoldBright.copy(alpha = 0.85f)),
+            shadowElevation = 6.dp,
+            modifier = Modifier.fillMaxSize()
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = contentDescription,
+                    tint = com.example.ui.theme.SanctuaryGoldBright,
+                    modifier = Modifier.size((sizeDp.value * 0.45f).dp)
+                )
+            }
+        }
+    }
+}
+
+/**
+ * High-precision circular progress arc drawn directly on Canvas.
+ */
+@Composable
+fun CircularProgressArc(
+    progress: Float,
+    modifier: Modifier = Modifier,
+    strokeWidth: Dp = 4.dp,
+    progressColor: Color = com.example.ui.theme.SanctuaryGoldWarm,
+    trackColor: Color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+) {
+    val clamped = progress.coerceIn(0f, 1f)
+    Canvas(modifier = modifier) {
+        val stroke = Stroke(width = strokeWidth.toPx(), cap = StrokeCap.Round)
+        val pad = strokeWidth.toPx() / 2f
+        val arcSize = Size(size.width - pad * 2, size.height - pad * 2)
+        val topLeft = Offset(pad, pad)
+
+        // Track
+        drawArc(
+            color = trackColor,
+            startAngle = -90f,
+            sweepAngle = 360f,
+            useCenter = false,
+            topLeft = topLeft,
+            size = arcSize,
+            style = stroke
+        )
+
+        // Progress
+        if (clamped > 0f) {
+            drawArc(
+                color = progressColor,
+                startAngle = -90f,
+                sweepAngle = clamped * 360f,
+                useCenter = false,
+                topLeft = topLeft,
+                size = arcSize,
+                style = stroke
+            )
+        }
+    }
+}
+
 

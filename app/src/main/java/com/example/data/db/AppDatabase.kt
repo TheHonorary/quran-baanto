@@ -8,14 +8,20 @@ import androidx.room.RoomDatabase
 @Database(
     entities = [
         DistributionEntity::class,
-        ParticipantEntity::class
+        ParticipantEntity::class,
+        StreakEntity::class,
+        ReadingPlanEntity::class,
+        DailyLogEntity::class,
+        StreakCircleEntity::class,
+        StreakCircleMemberEntity::class
     ],
-    version = 6,
+    version = 7,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
 
     abstract fun distributionDao(): DistributionDao
+    abstract fun streakDao(): StreakDao
 
     companion object {
         @Volatile
